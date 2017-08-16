@@ -457,6 +457,7 @@ function _clearStorage() {
     if (window.localStorage) {
         const hsUrl = window.localStorage.getItem("mx_hs_url");
         const isUrl = window.localStorage.getItem("mx_is_url");
+        var last_room_id = window.localStorage.getItem("mx_last_room_id");
         window.localStorage.clear();
 
         // preserve our HS & IS URLs for convenience
@@ -465,6 +466,7 @@ function _clearStorage() {
         // NB. We do clear the device ID (as well as all the settings)
         if (hsUrl) window.localStorage.setItem("mx_hs_url", hsUrl);
         if (isUrl) window.localStorage.setItem("mx_is_url", isUrl);
+        if(last_room_id) window.localStorage.setItem("mx_last_room_id", last_room_id);
     }
 
     // create a temporary client to clear out the persistent stores.
