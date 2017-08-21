@@ -354,7 +354,7 @@ module.exports = React.createClass({
                 <div className="mx_Login_box">
                     <LoginHeader />
                     <div>
-                        <h2>{ _t('Sign in')}
+                        <h2>
                             { loader }
                         </h2>
                         { this.componentForStep(this.state.currentFlow) }
