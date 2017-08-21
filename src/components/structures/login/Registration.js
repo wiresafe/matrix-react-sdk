@@ -399,7 +399,6 @@ module.exports = React.createClass({
                         {_t('I already have an account')}
                     </a>
                     {returnToAppJsx}
-                    <LoginFooter />
                 </div>
             </div>
         );

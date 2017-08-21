@@ -96,7 +96,7 @@ module.exports = React.createClass({
                         { _t(
                             'Resetting password will currently reset any ' +
                             'end-to-end encryption keys on all devices, ' +
-                            'making encrypted chat history unreadable, ' + 
+                            'making encrypted chat history unreadable, ' +
                             'unless you first export your room keys and re-import ' +
                             'them afterwards. In future this will be improved.'
                         ) }
@@ -234,7 +234,6 @@ module.exports = React.createClass({
                     <a className="mx_Login_create" onClick={this.props.onRegisterClick} href="#">
                         { _t('Create an account') }
                     </a>
-                    <LoginFooter />
                 </div>
             </div>
             );

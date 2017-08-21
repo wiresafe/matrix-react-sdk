@@ -343,7 +343,6 @@ module.exports = React.createClass({
                         </a>
                         { loginAsGuestJsx }
                         { returnToAppJsx }
-                        <LoginFooter />
                     </div>
                 </div>
             </div>
