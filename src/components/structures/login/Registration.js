@@ -276,6 +276,12 @@ module.exports = React.createClass({
             case "RegistrationForm.ERR_USERNAME_BLANK":
                 errMsg = _t('You need to enter a user name.');
                 break;
+            case "RegistrationForm.ERR_EMAIL_BLANK":
+                errMsg = 'You need to enter an Email.';
+                break;
+            case "RegistrationForm.ERR_PHONENUMBER_BLANK":
+                errMsg = 'You need to enter a phone number.';
+                break;
             default:
                 console.error("Unknown error code: %s", errCode);
                 errMsg = _t('An unknown error occurred.');
