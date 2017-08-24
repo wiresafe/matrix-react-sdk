@@ -261,6 +261,15 @@ module.exports = React.createClass({
         return errorText;
     },
 
+    showServerConfig: function() {
+      var settingsForm = document.getElementById('SettingsDiv');
+      if (settingsForm.style.display === 'none' || settingsForm.style.display === "") {
+        settingsForm.style.display = 'block';
+      } else {
+        settingsForm.style.display = 'none';
+      }
+    },
+
     componentForStep: function(step) {
         switch (step) {
             case 'm.login.password':
@@ -327,14 +336,6 @@ module.exports = React.createClass({
                             { loader }
                         </h2>
                         { this.componentForStep(this.state.currentFlow) }
-                        <ServerConfig ref="serverConfig"
-                            withToggleButton={true}
-                            customHsUrl={this.props.customHsUrl}
-                            customIsUrl={this.props.customIsUrl}
-                            defaultHsUrl={this.props.defaultHsUrl}
-                            defaultIsUrl={this.props.defaultIsUrl}
-                            onServerConfigChange={this.onServerConfigChange}
-                            delayTimeMs={1000}/>
                         <div className="mx_Login_error">
                                 { this.state.errorText }
                         </div>
@@ -344,6 +345,17 @@ module.exports = React.createClass({
                         { loginAsGuestJsx }
                         { returnToAppJsx }
                     </div>
+                </div>
+                <div className="mx_Login_Serverconfig">
+                  <div className='mx_Login_ServerconfigImage'><button className="mx_Login_ServerconfigButton" onClick={this.showServerConfig} id="SettingsButton">Settings</button></div>
+                  <div id="SettingsDiv" className="mx_Login_type_container_SettingsDiv"><ServerConfig ref="serverConfig"
+                      withToggleButton={true}
+                      customHsUrl={this.props.customHsUrl}
+                      customIsUrl={this.props.customIsUrl}
+                      defaultHsUrl={this.props.defaultHsUrl}
+                      defaultIsUrl={this.props.defaultIsUrl}
+                      onServerConfigChange={this.onServerConfigChange}
+                      delayTimeMs={1000}/></div>
                 </div>
             </div>
         );
