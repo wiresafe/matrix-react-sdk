@@ -131,6 +131,15 @@ module.exports = React.createClass({
         });
     },
 
+    showServerConfig: function() {
+      var settingsForm = document.getElementById('SettingsDiv');
+      if (settingsForm.style.display === 'none' || settingsForm.style.display === "") {
+        settingsForm.style.display = 'block';
+      } else {
+        settingsForm.style.display = 'none';
+      }
+    },
+
     onInputChanged: function(stateKey, ev) {
         this.setState({
             [stateKey]: ev.target.value
@@ -231,7 +240,6 @@ module.exports = React.createClass({
                     <a className="mx_Login_create" onClick={this.props.onRegisterClick} href="#">
                         { _t('Create an account') }
                     </a>
-                    <LoginFooter />
                 </div>
             </div>
             );
