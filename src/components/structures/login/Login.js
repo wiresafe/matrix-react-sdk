@@ -347,7 +347,7 @@ module.exports = React.createClass({
                     </div>
                 </div>
                 <div className="mx_Login_Serverconfig">
-                  <div className='mx_Login_ServerconfigImage'><button className="mx_Login_ServerconfigButton" onClick={this.showServerConfig} id="SettingsButton">Settings</button></div>
+                  <div className='mx_Login_ServerconfigImage'><img src="/img/settings-big.png" className="mx_Login_ServerconfigButton" onClick={this.showServerConfig} id="SettingsButton"/></div>
                   <div id="SettingsDiv" className="mx_Login_type_container_SettingsDiv"><ServerConfig ref="serverConfig"
                       withToggleButton={true}
                       customHsUrl={this.props.customHsUrl}
