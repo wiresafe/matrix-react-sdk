@@ -1,6 +1,7 @@
 /*
 Copyright 2015, 2016 OpenMarket Ltd
 Copyright 2017 Vector Creations Ltd
+Copyright 2017 New Vector Ltd
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,7 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import q from 'q';
+import Promise from 'bluebird';
 
 import React from 'react';
 import Matrix from "matrix-js-sdk";
@@ -31,6 +32,7 @@ import dis from "../../dispatcher";
 import Modal from "../../Modal";
 import Tinter from "../../Tinter";
 import sdk from '../../index';
+import { showStartChatInviteDialog, showRoomInviteDialog } from '../../Invite';
 import * as Rooms from '../../Rooms';
 import linkifyMatrix from "../../linkify-matrix";
 import * as Lifecycle from '../../Lifecycle';
@@ -41,9 +43,44 @@ import PageTypes from '../../PageTypes';
 
 import createRoom from "../../createRoom";
 import * as UDEHandler from '../../UnknownDeviceErrorHandler';
+import KeyRequestHandler from '../../KeyRequestHandler';
 import { _t, getCurrentLanguage } from '../../languageHandler';
 
+/** constants for MatrixChat.state.view */
+const VIEWS = {
+    // a special initial state which is only used at startup, while we are
+    // trying to re-animate a matrix client or register as a guest.
+    LOADING: 0,
+
+    // we are showing the login view
+    LOGIN: 1,
+
+    // we are showing the registration view
+    REGISTER: 2,
+
+    // completeing the registration flow
+    POST_REGISTRATION: 3,
+
+    // showing the 'forgot password' view
+    FORGOT_PASSWORD: 4,
+
+    // we have valid matrix credentials (either via an explicit login, via the
+    // initial re-animation/guest registration, or via a registration), and are
+    // now setting up a matrixclient to talk to it. This isn't an instant
+    // process because (a) we need to clear out indexeddb, and (b) we need to
+    // talk to the team server; while it is going on we show a big spinner.
+    LOGGING_IN: 5,
+
+    // we are logged in with an active matrix client.
+    LOGGED_IN: 6,
+};
+
 module.exports = React.createClass({
+    // we export this so that the integration tests can use it :-S
+    statics: {
+        VIEWS: VIEWS,
+    },
+
     displayName: 'MatrixChat',
 
     propTypes: {
@@ -59,8 +96,8 @@ module.exports = React.createClass({
         // the initial queryParams extracted from the hash-fragment of the URI
         startingFragmentQueryParams: React.PropTypes.object,
 
-        // called when the session load completes
-        onLoadCompleted: React.PropTypes.func,
+        // called when we have completed a token login
+        onTokenLoginCompleted: React.PropTypes.func,
 
         // Represents the screen to display as a result of parsing the initial
         // window.location
@@ -93,14 +130,8 @@ module.exports = React.createClass({
 
     getInitialState: function() {
         const s = {
-            loading: true,
-            screen: undefined,
-            screenAfterLogin: this.props.initialScreenAfterLogin,
-
-            // Stashed guest credentials if the user logs out
-            // whilst logged in as a guest user (so they can change
-            // their mind & log back in)
-            guestCreds: null,
+            // the master view we are showing.
+            view: VIEWS.LOADING,
 
             // What the LoggedInView would be showing if visible
             page_type: null,
@@ -113,12 +144,8 @@ module.exports = React.createClass({
             // If we're trying to just view a user ID (i.e. /user URL), this is it
             viewUserId: null,
 
-            loggedIn: false,
-            loggingIn: false,
             collapse_lhs: false,
             collapse_rhs: false,
-            ready: false,
-            width: 10000,
             leftOpacity: 1.0,
             middleOpacity: 1.0,
             rightOpacity: 1.0,
@@ -127,6 +154,7 @@ module.exports = React.createClass({
             newVersion: null,
             hasNewVersion: false,
             newVersionReleaseNotes: null,
+            checkingForUpdate: null,
 
             // Parameters used in the registration dance with the IS
             register_client_secret: null,
@@ -143,7 +171,7 @@ module.exports = React.createClass({
             realQueryParams: {},
             startingFragmentQueryParams: {},
             config: {},
-            onLoadCompleted: () => {},
+            onTokenLoginCompleted: () => {},
         };
     },
 
@@ -193,7 +221,7 @@ module.exports = React.createClass({
 
         // Used by _viewRoom before getting state from sync
         this.firstSyncComplete = false;
-        this.firstSyncPromise = q.defer();
+        this.firstSyncPromise = Promise.defer();
 
         if (this.props.config.sync_timeline_limit) {
             MatrixClientPeg.opts.initialSyncLimit = this.props.config.sync_timeline_limit;
@@ -243,6 +271,15 @@ module.exports = React.createClass({
                 register_hs_url: paramHs,
             });
         }
+
+        // a thing to call showScreen with once login completes.  this is kept
+        // outside this.state because updating it should never trigger a
+        // rerender.
+        this._screenAfterLogin = this.props.initialScreenAfterLogin;
+
+        this._windowWidth = 10000;
+        this.handleResize();
+        window.addEventListener('resize', this.handleResize);
     },
 
     componentDidMount: function() {
@@ -259,46 +296,55 @@ module.exports = React.createClass({
         if (this.onUserClick) {
             linkifyMatrix.onUserClick = this.onUserClick;
         }
-
-        window.addEventListener('resize', this.handleResize);
-        this.handleResize();
+        if (this.onGroupClick) {
+            linkifyMatrix.onGroupClick = this.onGroupClick;
+        }
 
         const teamServerConfig = this.props.config.teamServerConfig || {};
         Lifecycle.initRtsClient(teamServerConfig.teamServerURL);
 
-        // if the user has followed a login or register link, don't reanimate
-        // the old creds, but rather go straight to the relevant page
+        // the first thing to do is to try the token params in the query-string
+        Lifecycle.attemptTokenLogin(this.props.realQueryParams).then((loggedIn) => {
+            if(loggedIn) {
+                this.props.onTokenLoginCompleted();
 
-        const firstScreen = this.state.screenAfterLogin ?
-            this.state.screenAfterLogin.screen : null;
+                // don't do anything else until the page reloads - just stay in
+                // the 'loading' state.
+                return;
+            }
 
-        if (firstScreen === 'login' ||
-                firstScreen === 'register' ||
-                firstScreen === 'forgot_password') {
-            this.props.onLoadCompleted();
-            this.setState({loading: false});
-            this._showScreenAfterLogin();
-            return;
-        }
+            // if the user has followed a login or register link, don't reanimate
+            // the old creds, but rather go straight to the relevant page
+            const firstScreen = this._screenAfterLogin ?
+                this._screenAfterLogin.screen : null;
 
-        // the extra q() ensures that synchronous exceptions hit the same codepath as
-        // asynchronous ones.
-        q().then(() => {
-            return Lifecycle.loadSession({
-                realQueryParams: this.props.realQueryParams,
-                fragmentQueryParams: this.props.startingFragmentQueryParams,
-                enableGuest: this.props.enableGuest,
-                guestHsUrl: this.getCurrentHsUrl(),
-                guestIsUrl: this.getCurrentIsUrl(),
-                defaultDeviceDisplayName: this.props.defaultDeviceDisplayName,
+            if (firstScreen === 'login' ||
+                    firstScreen === 'register' ||
+                    firstScreen === 'forgot_password') {
+                this._showScreenAfterLogin();
+                return;
+            }
+
+            // the extra Promise.resolve() ensures that synchronous exceptions hit the same codepath as
+            // asynchronous ones.
+            return Promise.resolve().then(() => {
+                return Lifecycle.loadSession({
+                    fragmentQueryParams: this.props.startingFragmentQueryParams,
+                    enableGuest: this.props.enableGuest,
+                    guestHsUrl: this.getCurrentHsUrl(),
+                    guestIsUrl: this.getCurrentIsUrl(),
+                    defaultDeviceDisplayName: this.props.defaultDeviceDisplayName,
+                });
+            }).catch((e) => {
+                console.error(`Error attempting to load session: ${e}`);
+                return false;
+            }).then((loadedSession) => {
+                if (!loadedSession) {
+                    // fall back to showing the login screen
+                    dis.dispatch({action: "start_login"});
+                }
             });
-        }).catch((e) => {
-            console.error("Unable to load session", e);
-        }).done(()=>{
-            // stuff this through the dispatcher so that it happens
-            // after the on_logged_in action.
-            dis.dispatch({action: 'load_completed'});
-        });
+        }).done();
     },
 
     componentWillUnmount: function() {
@@ -317,18 +363,19 @@ module.exports = React.createClass({
         }
     },
 
-    setStateForNewScreen: function(state) {
+    setStateForNewView: function(state) {
+        if (state.view === undefined) {
+            throw new Error("setStateForNewView with no view!");
+        }
         const newState = {
-            screen: undefined,
             viewUserId: null,
-            loggedIn: false,
-            ready: false,
-       };
-       Object.assign(newState, state);
-       this.setState(newState);
+        };
+        Object.assign(newState, state);
+        this.setState(newState);
     },
 
     onAction: function(payload) {
+        // console.log(`MatrixClientPeg.onAction: ${payload.action}`);
         const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
         const QuestionDialog = sdk.getComponent("dialogs.QuestionDialog");
 
@@ -340,26 +387,19 @@ module.exports = React.createClass({
                 this._startRegistration(payload.params || {});
                 break;
             case 'start_login':
-                if (MatrixClientPeg.get() &&
-                    MatrixClientPeg.get().isGuest()
-                ) {
-                    this.setState({
-                        guestCreds: MatrixClientPeg.getCredentials(),
-                    });
-                }
-                this.setStateForNewScreen({
-                    screen: 'login',
+                this.setStateForNewView({
+                    view: VIEWS.LOGIN,
                 });
                 this.notifyNewScreen('login');
                 break;
             case 'start_post_registration':
-                this.setState({ // don't clobber loggedIn status
-                    screen: 'post_registration',
+                this.setState({
+                    view: VIEWS.POST_REGISTRATION,
                 });
                 break;
             case 'start_password_recovery':
-                this.setStateForNewScreen({
-                    screen: 'forgot_password',
+                this.setStateForNewView({
+                    view: VIEWS.FORGOT_PASSWORD,
                 });
                 this.notifyNewScreen('forgot_password');
                 break;
@@ -372,7 +412,7 @@ module.exports = React.createClass({
                 this._leaveRoom(payload.room_id);
                 break;
             case 'reject_invite':
-                Modal.createDialog(QuestionDialog, {
+                Modal.createTrackedDialog('Reject invitation', '', QuestionDialog, {
                     title: _t('Reject invitation'),
                     description: _t('Are you sure you want to reject the invitation?'),
                     onFinished: (confirm) => {
@@ -388,7 +428,7 @@ module.exports = React.createClass({
                                 }
                             }, (err) => {
                                 modal.close();
-                                Modal.createDialog(ErrorDialog, {
+                                Modal.createTrackedDialog('Failed to reject invitation', '', ErrorDialog, {
                                     title: _t('Failed to reject invitation'),
                                     description: err.toString(),
                                 });
@@ -448,6 +488,18 @@ module.exports = React.createClass({
                 this._setPage(PageTypes.RoomDirectory);
                 this.notifyNewScreen('directory');
                 break;
+            case 'view_my_groups':
+                this._setPage(PageTypes.MyGroups);
+                this.notifyNewScreen('groups');
+                break;
+            case 'view_group':
+                {
+                    const groupId = payload.group_id;
+                    this.setState({currentGroupId: groupId});
+                    this._setPage(PageTypes.GroupView);
+                    this.notifyNewScreen('group/' + groupId);
+                }
+                break;
             case 'view_home_page':
                 this._setPage(PageTypes.HomePage);
                 this.notifyNewScreen('home');
@@ -456,13 +508,13 @@ module.exports = React.createClass({
                 this._setMxId(payload);
                 break;
             case 'view_start_chat_or_reuse':
-                this._chatCreateOrReuse(payload.user_id);
+                this._chatCreateOrReuse(payload.user_id, payload.go_home_on_cancel);
                 break;
             case 'view_create_chat':
                 this._createChat();
                 break;
             case 'view_invite':
-                this._invite(payload.roomId);
+                showRoomInviteDialog(payload.roomId);
                 break;
             case 'notifier_enabled':
                 this.forceUpdate();
@@ -502,7 +554,9 @@ module.exports = React.createClass({
                 // We are now logging in, so set the state to reflect that
                 // NB. This does not touch 'ready' since if our dispatches
                 // are delayed, the sync could already have completed
-                this.setState({loggingIn: true});
+                this.setStateForNewView({
+                    view: VIEWS.LOGGING_IN,
+                });
                 break;
             case 'on_logged_in':
                 this._onLoggedIn(payload.teamToken);
@@ -511,16 +565,21 @@ module.exports = React.createClass({
                 this._onLoggedOut();
                 break;
             case 'will_start_client':
-                this._onWillStartClient();
-                break;
-            case 'load_completed':
-                this._onLoadCompleted();
+                this.setState({ready: false}, () => {
+                    // if the client is about to start, we are, by definition, not ready.
+                    // Set ready to false now, then it'll be set to true when the sync
+                    // listener we set below fires.
+                    this._onWillStartClient();
+                });
                 break;
             case 'new_version':
                 this.onVersion(
                     payload.currentVersion, payload.newVersion,
                     payload.releaseNotes,
                 );
+                break;
+            case 'check_updates':
+                this.setState({ checkingForUpdate: payload.value });
                 break;
             case 'send_event':
                 this.onSendEvent(payload.room_id, payload.event);
@@ -539,8 +598,8 @@ module.exports = React.createClass({
     },
 
     _startRegistration: function(params) {
-        this.setStateForNewScreen({
-            screen: 'register',
+        this.setStateForNewView({
+            view: VIEWS.REGISTER,
             // these params may be undefined, but if they are,
             // unset them from our state: we don't want to
             // resume a previous registration session if the
@@ -637,7 +696,7 @@ module.exports = React.createClass({
 
         // Wait for the first sync to complete so that if a room does have an alias,
         // it would have been retrieved.
-        let waitFor = q(null);
+        let waitFor = Promise.resolve(null);
         if (!this.firstSyncComplete) {
             if (!this.firstSyncPromise) {
                 console.warn('Cannot view a room before first sync. room_id:', roomInfo.room_id);
@@ -671,7 +730,7 @@ module.exports = React.createClass({
 
     _setMxId: function(payload) {
         const SetMxIdDialog = sdk.getComponent('views.dialogs.SetMxIdDialog');
-        const close = Modal.createDialog(SetMxIdDialog, {
+        const close = Modal.createTrackedDialog('Set MXID', '', SetMxIdDialog, {
             homeserverUrl: MatrixClientPeg.get().getHomeserverUrl(),
             onFinished: (submitted, credentials) => {
                 if (!submitted) {
@@ -709,13 +768,7 @@ module.exports = React.createClass({
             dis.dispatch({action: 'view_set_mxid'});
             return;
         }
-        const ChatInviteDialog = sdk.getComponent("dialogs.ChatInviteDialog");
-        Modal.createDialog(ChatInviteDialog, {
-            title: _t('Start a chat'),
-            description: _t("Who would you like to communicate with?"),
-            placeholder: _t("Email, name or matrix ID"),
-            button: _t("Start Chat"),
-        });
+        showStartChatInviteDialog();
     },
 
     _createRoom: function() {
@@ -730,7 +783,7 @@ module.exports = React.createClass({
             return;
         }
         const TextInputDialog = sdk.getComponent("dialogs.TextInputDialog");
-        Modal.createDialog(TextInputDialog, {
+        Modal.createTrackedDialog('Create Room', '', TextInputDialog, {
             title: _t('Create Room'),
             description: _t('Room name (optional)'),
             button: _t('Create Room'),
@@ -744,7 +797,9 @@ module.exports = React.createClass({
         });
     },
 
-    _chatCreateOrReuse: function(userId) {
+    _chatCreateOrReuse: function(userId, goHomeOnCancel) {
+        if (goHomeOnCancel === undefined) goHomeOnCancel = true;
+
         const ChatCreateOrReuseDialog = sdk.getComponent(
             'views.dialogs.ChatCreateOrReuseDialog',
         );
@@ -772,10 +827,10 @@ module.exports = React.createClass({
             return;
         }
 
-        const close = Modal.createDialog(ChatCreateOrReuseDialog, {
+        const close = Modal.createTrackedDialog('Chat create or reuse', '', ChatCreateOrReuseDialog, {
             userId: userId,
             onFinished: (success) => {
-                if (!success) {
+                if (!success && goHomeOnCancel) {
                     // Dialog cancelled, default to home
                     dis.dispatch({ action: 'view_home_page' });
                 }
@@ -798,23 +853,12 @@ module.exports = React.createClass({
         }).close;
     },
 
-    _invite: function(roomId) {
-        const ChatInviteDialog = sdk.getComponent("dialogs.ChatInviteDialog");
-        Modal.createDialog(ChatInviteDialog, {
-            title: _t('Invite new room members'),
-            description: _t('Who would you like to add to this room?'),
-            button: _t('Send Invites'),
-            placeholder: _t("Email, name or matrix ID"),
-            roomId: roomId,
-        });
-    },
-
     _leaveRoom: function(roomId) {
         const QuestionDialog = sdk.getComponent("dialogs.QuestionDialog");
         const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
 
         const roomToLeave = MatrixClientPeg.get().getRoom(roomId);
-        Modal.createDialog(QuestionDialog, {
+        Modal.createTrackedDialog('Leave room', '', QuestionDialog, {
             title: _t("Leave room"),
             description: (
                 <span>
@@ -837,7 +881,7 @@ module.exports = React.createClass({
                     }, (err) => {
                         modal.close();
                         console.error("Failed to leave room " + roomId + " " + err);
-                        Modal.createDialog(ErrorDialog, {
+                        Modal.createTrackedDialog('Failed to leave room', '', ErrorDialog, {
                             title: _t("Failed to leave room"),
                             description: (err && err.message ? err.message :
                                 _t("Server may be unavailable, overloaded, or you hit a bug.")),
@@ -846,14 +890,6 @@ module.exports = React.createClass({
                 }
             },
         });
-    },
-
-    /**
-     * Called when the sessionloader has finished
-     */
-    _onLoadCompleted: function() {
-        this.props.onLoadCompleted();
-        this.setState({loading: false});
     },
 
     /**
@@ -908,9 +944,7 @@ module.exports = React.createClass({
      */
     _onLoggedIn: function(teamToken) {
         this.setState({
-            guestCreds: null,
-            loggedIn: true,
-            loggingIn: false,
+            view: VIEWS.LOGGED_IN,
         });
 
         if (teamToken) {
@@ -943,14 +977,12 @@ module.exports = React.createClass({
     _showScreenAfterLogin: function() {
         // If screenAfterLogin is set, use that, then null it so that a second login will
         // result in view_home_page, _user_settings or _room_directory
-        if (this.state.screenAfterLogin && this.state.screenAfterLogin.screen) {
+        if (this._screenAfterLogin && this._screenAfterLogin.screen) {
             this.showScreen(
-                this.state.screenAfterLogin.screen,
-                this.state.screenAfterLogin.params,
+                this._screenAfterLogin.screen,
+                this._screenAfterLogin.params,
             );
-            // XXX: is this necessary? `showScreen` should do it for us.
-            this.notifyNewScreen(this.state.screenAfterLogin.screen);
-            this.setState({screenAfterLogin: null});
+            this._screenAfterLogin = null;
         } else if (localStorage && localStorage.getItem('mx_last_room_id')) {
             // Before defaulting to directory, show the last viewed room
             dis.dispatch({
@@ -967,8 +999,8 @@ module.exports = React.createClass({
      */
     _onLoggedOut: function() {
         this.notifyNewScreen('login');
-        this.setStateForNewScreen({
-            loggedIn: false,
+        this.setStateForNewView({
+            view: VIEWS.LOGIN,
             ready: false,
             collapse_lhs: false,
             collapse_rhs: false,
@@ -976,6 +1008,7 @@ module.exports = React.createClass({
             page_type: PageTypes.RoomDirectory,
         });
         this._teamToken = null;
+        this._setPageSubtitle();
     },
 
     /**
@@ -984,16 +1017,12 @@ module.exports = React.createClass({
      */
     _onWillStartClient() {
         const self = this;
-        // if the client is about to start, we are, by definition, not ready.
-        // Set ready to false now, then it'll be set to true when the sync
-        // listener we set below fires.
-        this.setState({ready: false});
 
         // reset the 'have completed first sync' flag,
         // since we're about to start the client and therefore about
         // to do the first sync
         this.firstSyncComplete = false;
-        this.firstSyncPromise = q.defer();
+        this.firstSyncPromise = Promise.defer();
         const cli = MatrixClientPeg.get();
 
         // Allow the JS SDK to reap timeline events. This reduces the amount of
@@ -1039,14 +1068,17 @@ module.exports = React.createClass({
             self.setState({ready: true});
         });
         cli.on('Call.incoming', function(call) {
+            // we dispatch this synchronously to make sure that the event
+            // handlers on the call are set up immediately (so that if
+            // we get an immediate hangup, we don't get a stuck call)
             dis.dispatch({
                 action: 'incoming_call',
                 call: call,
-            });
+            }, true);
         });
         cli.on('Session.logged_out', function(call) {
             const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
-            Modal.createDialog(ErrorDialog, {
+            Modal.createTrackedDialog('Signed out', '', ErrorDialog, {
                 title: _t('Signed Out'),
                 description: _t('For security, this session has been signed out. Please sign in again.'),
             });
@@ -1063,6 +1095,14 @@ module.exports = React.createClass({
                     });
                 }
             }
+        });
+
+        const krh = new KeyRequestHandler(cli);
+        cli.on("crypto.roomKeyRequest", (req) => {
+            krh.handleKeyRequest(req);
+        });
+        cli.on("crypto.roomKeyRequestCancellation", (req) => {
+            krh.handleKeyRequestCancellation(req);
         });
     },
 
@@ -1103,6 +1143,10 @@ module.exports = React.createClass({
             dis.dispatch({
                 action: 'view_room_directory',
             });
+        } else if (screen == 'groups') {
+            dis.dispatch({
+                action: 'view_my_groups',
+            });
         } else if (screen == 'post_registration') {
             dis.dispatch({
                 action: 'start_post_registration',
@@ -1141,27 +1185,39 @@ module.exports = React.createClass({
 
             // we can't view a room unless we're logged in
             // (a guest account is fine)
-            if (this.state.loggedIn) {
+            if (this.state.view === VIEWS.LOGGED_IN) {
                 dis.dispatch(payload);
             }
         } else if (screen.indexOf('user/') == 0) {
             const userId = screen.substring(5);
 
-            if (params.action === 'chat') {
-                this._chatCreateOrReuse(userId);
-                return;
-            }
+            // Wait for the first sync so that `getRoom` gives us a room object if it's
+            // in the sync response
+            const waitFor = this.firstSyncPromise ?
+                this.firstSyncPromise.promise : Promise.resolve();
+            waitFor.then(() => {
+                if (params.action === 'chat') {
+                    this._chatCreateOrReuse(userId);
+                    return;
+                }
 
-            this.setState({ viewUserId: userId });
-            this._setPage(PageTypes.UserView);
-            this.notifyNewScreen('user/' + userId);
-            const member = new Matrix.RoomMember(null, userId);
-            if (member) {
+                this._setPage(PageTypes.UserView);
+                this.notifyNewScreen('user/' + userId);
+                const member = new Matrix.RoomMember(null, userId);
                 dis.dispatch({
                     action: 'view_user',
                     member: member,
                 });
-            }
+            });
+        } else if (screen.indexOf('group/') == 0) {
+            const groupId = screen.substring(6);
+
+            // TODO: Check valid group ID
+
+            dis.dispatch({
+                action: 'view_group',
+                group_id: groupId,
+            });
         } else {
             console.info("Ignoring showScreen for '%s'", screen);
         }
@@ -1190,6 +1246,11 @@ module.exports = React.createClass({
         });
     },
 
+    onGroupClick: function(event, groupId) {
+        event.preventDefault();
+        dis.dispatch({action: 'view_group', group_id: groupId});
+    },
+
     onLogoutClick: function(event) {
         dis.dispatch({
             action: 'logout',
@@ -1204,20 +1265,20 @@ module.exports = React.createClass({
         const hideRhsThreshold = 820;
         const showRhsThreshold = 820;
 
-        if (this.state.width > hideLhsThreshold && window.innerWidth <= hideLhsThreshold) {
+        if (this._windowWidth > hideLhsThreshold && window.innerWidth <= hideLhsThreshold) {
             dis.dispatch({ action: 'hide_left_panel' });
         }
-        if (this.state.width <= showLhsThreshold && window.innerWidth > showLhsThreshold) {
+        if (this._windowWidth <= showLhsThreshold && window.innerWidth > showLhsThreshold) {
             dis.dispatch({ action: 'show_left_panel' });
         }
-        if (this.state.width > hideRhsThreshold && window.innerWidth <= hideRhsThreshold) {
+        if (this._windowWidth > hideRhsThreshold && window.innerWidth <= hideRhsThreshold) {
             dis.dispatch({ action: 'hide_right_panel' });
         }
-        if (this.state.width <= showRhsThreshold && window.innerWidth > showRhsThreshold) {
+        if (this._windowWidth <= showRhsThreshold && window.innerWidth > showRhsThreshold) {
             dis.dispatch({ action: 'show_right_panel' });
         }
 
-        this.setState({width: window.innerWidth});
+        this._windowWidth = window.innerWidth;
     },
 
     onRoomCreated: function(roomId) {
@@ -1239,29 +1300,25 @@ module.exports = React.createClass({
         this.showScreen("forgot_password");
     },
 
-    onReturnToGuestClick: function() {
-        // reanimate our guest login
-        if (this.state.guestCreds) {
-            // TODO: this is probably a bit broken - we don't want to be
-            // clearing storage when we reanimate the guest creds.
-            Lifecycle.setLoggedIn(this.state.guestCreds);
-            this.setState({guestCreds: null});
-        }
+    onReturnToAppClick: function() {
+        // treat it the same as if the user had completed the login
+        this._onLoggedIn(null);
     },
 
+    // returns a promise which resolves to the new MatrixClient
     onRegistered: function(credentials, teamToken) {
         // XXX: These both should be in state or ideally store(s) because we risk not
         //      rendering the most up-to-date view of state otherwise.
         // teamToken may not be truthy
         this._teamToken = teamToken;
         this._is_registered = true;
-        Lifecycle.setLoggedIn(credentials);
+        return Lifecycle.setLoggedIn(credentials);
     },
 
     onFinishPostRegistration: function() {
         // Don't confuse this with "PageType" which is the middle window to show
         this.setState({
-            screen: undefined,
+            view: VIEWS.LOGGED_IN,
         });
         this.showScreen("settings");
     },
@@ -1272,6 +1329,7 @@ module.exports = React.createClass({
             newVersion: latest,
             hasNewVersion: current !== latest,
             newVersionReleaseNotes: releaseNotes,
+            checkingForUpdate: null,
         });
     },
 
@@ -1296,6 +1354,10 @@ module.exports = React.createClass({
         });
     },
 
+    _setPageSubtitle: function(subtitle='') {
+        document.title = `Riot ${subtitle}`;
+    },
+
     updateStatusIndicator: function(state, prevState) {
         let notifCount = 0;
 
@@ -1316,15 +1378,15 @@ module.exports = React.createClass({
             PlatformPeg.get().setNotificationCount(notifCount);
         }
 
-        let title = "Riot ";
+        let subtitle = '';
         if (state === "ERROR") {
-            title += `[${_t("Offline")}] `;
+            subtitle += `[${_t("Offline")}] `;
         }
         if (notifCount > 0) {
-            title += `[${notifCount}]`;
+            subtitle += `[${notifCount}]`;
         }
 
-        document.title = title;
+        this._setPageSubtitle(subtitle);
     },
 
     onUserSettingsClose: function() {
@@ -1350,11 +1412,9 @@ module.exports = React.createClass({
     },
 
     render: function() {
-        // `loading` might be set to false before `loggedIn = true`, causing the default
-        // (`<Login>`) to be visible for a few MS (say, whilst a request is in-flight to
-        // the RTS). So in the meantime, use `loggingIn`, which is true between
-        // actions `on_logging_in` and `on_logged_in`.
-        if (this.state.loading || this.state.loggingIn) {
+        // console.log(`Rendering MatrixChat with view ${this.state.view}`);
+
+        if (this.state.view === VIEWS.LOADING || this.state.view === VIEWS.LOGGING_IN) {
             const Spinner = sdk.getComponent('elements.Spinner');
             return (
                 <div className="mx_MatrixChat_splash">
@@ -1364,7 +1424,7 @@ module.exports = React.createClass({
         }
 
         // needs to be before normal PageTypes as you are logged in technically
-        if (this.state.screen == 'post_registration') {
+        if (this.state.view === VIEWS.POST_REGISTRATION) {
             const PostRegistration = sdk.getComponent('structures.login.PostRegistration');
             return (
                 <PostRegistration
@@ -1372,38 +1432,42 @@ module.exports = React.createClass({
             );
         }
 
-        // `ready` and `loggedIn` may be set before `page_type` (because the
-        // latter is set via the dispatcher). If we don't yet have a `page_type`,
-        // keep showing the spinner for now.
-        if (this.state.loggedIn && this.state.ready && this.state.page_type) {
-            /* for now, we stuff the entirety of our props and state into the LoggedInView.
-             * we should go through and figure out what we actually need to pass down, as well
-             * as using something like redux to avoid having a billion bits of state kicking around.
-             */
-            const LoggedInView = sdk.getComponent('structures.LoggedInView');
-            return (
-               <LoggedInView ref="loggedInView" matrixClient={MatrixClientPeg.get()}
-                    onRoomCreated={this.onRoomCreated}
-                    onUserSettingsClose={this.onUserSettingsClose}
-                    onRegistered={this.onRegistered}
-                    currentRoomId={this.state.currentRoomId}
-                    teamToken={this._teamToken}
-                    {...this.props}
-                    {...this.state}
-                />
-            );
-        } else if (this.state.loggedIn) {
-            // we think we are logged in, but are still waiting for the /sync to complete
-            const Spinner = sdk.getComponent('elements.Spinner');
-            return (
-                <div className="mx_MatrixChat_splash">
-                    <Spinner />
-                    <a href="#" className="mx_MatrixChat_splashButtons" onClick={ this.onLogoutClick }>
-                    { _t('Logout') }
-                    </a>
-                </div>
-            );
-        } else if (this.state.screen == 'register') {
+        if (this.state.view === VIEWS.LOGGED_IN) {
+            // `ready` and `view==LOGGED_IN` may be set before `page_type` (because the
+            // latter is set via the dispatcher). If we don't yet have a `page_type`,
+            // keep showing the spinner for now.
+            if (this.state.ready && this.state.page_type) {
+                /* for now, we stuff the entirety of our props and state into the LoggedInView.
+                 * we should go through and figure out what we actually need to pass down, as well
+                 * as using something like redux to avoid having a billion bits of state kicking around.
+                 */
+                const LoggedInView = sdk.getComponent('structures.LoggedInView');
+                return (
+                   <LoggedInView ref="loggedInView" matrixClient={MatrixClientPeg.get()}
+                        onRoomCreated={this.onRoomCreated}
+                        onUserSettingsClose={this.onUserSettingsClose}
+                        onRegistered={this.onRegistered}
+                        currentRoomId={this.state.currentRoomId}
+                        teamToken={this._teamToken}
+                        {...this.props}
+                        {...this.state}
+                    />
+                );
+            } else {
+                // we think we are logged in, but are still waiting for the /sync to complete
+                const Spinner = sdk.getComponent('elements.Spinner');
+                return (
+                    <div className="mx_MatrixChat_splash">
+                        <Spinner />
+                        <a href="#" className="mx_MatrixChat_splashButtons" onClick={ this.onLogoutClick }>
+                        { _t('Logout') }
+                        </a>
+                    </div>
+                );
+            }
+        }
+
+        if (this.state.view === VIEWS.REGISTER) {
             const Registration = sdk.getComponent('structures.login.Registration');
             return (
                 <Registration
@@ -1423,10 +1487,13 @@ module.exports = React.createClass({
                     onLoggedIn={this.onRegistered}
                     onLoginClick={this.onLoginClick}
                     onRegisterClick={this.onRegisterClick}
-                    onCancelClick={this.state.guestCreds ? this.onReturnToGuestClick : null}
+                    onCancelClick={MatrixClientPeg.get() ? this.onReturnToAppClick : null}
                     />
             );
-        } else if (this.state.screen == 'forgot_password') {
+        }
+
+
+        if (this.state.view === VIEWS.FORGOT_PASSWORD) {
             const ForgotPassword = sdk.getComponent('structures.login.ForgotPassword');
             return (
                 <ForgotPassword
@@ -1438,7 +1505,9 @@ module.exports = React.createClass({
                     onRegisterClick={this.onRegisterClick}
                     onLoginClick={this.onLoginClick} />
             );
-        } else {
+        }
+
+        if (this.state.view === VIEWS.LOGIN) {
             const Login = sdk.getComponent('structures.login.Login');
             return (
                 <Login
@@ -1452,9 +1521,11 @@ module.exports = React.createClass({
                     defaultDeviceDisplayName={this.props.defaultDeviceDisplayName}
                     onForgotPasswordClick={this.onForgotPasswordClick}
                     enableGuest={this.props.enableGuest}
-                    onCancelClick={this.state.guestCreds ? this.onReturnToGuestClick : null}
+                    onCancelClick={MatrixClientPeg.get() ? this.onReturnToAppClick : null}
                 />
             );
         }
+
+        console.error(`Unknown view ${this.state.view}`);
     },
 });

@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import q from 'q';
+import Promise from 'bluebird';
 import React from 'react';
 import { _t, _tJsx } from '../../../languageHandler';
 import MatrixClientPeg from '../../../MatrixClientPeg';
@@ -24,8 +24,6 @@ import sdk from '../../../index';
 import Modal from '../../../Modal';
 import ObjectUtils from '../../../ObjectUtils';
 import dis from '../../../dispatcher';
-import ScalarAuthClient from '../../../ScalarAuthClient';
-import ScalarMessaging from '../../../ScalarMessaging';
 import UserSettingsStore from '../../../UserSettingsStore';
 import AccessibleButton from '../elements/AccessibleButton';
 
@@ -39,13 +37,14 @@ function parseIntWithDefault(val, def) {
 
 const BannedUser = React.createClass({
     propTypes: {
+        canUnban: React.PropTypes.bool,
         member: React.PropTypes.object.isRequired, // js-sdk RoomMember
         reason: React.PropTypes.string,
     },
 
     _onUnbanClick: function() {
         const ConfirmUserActionDialog = sdk.getComponent("dialogs.ConfirmUserActionDialog");
-        Modal.createDialog(ConfirmUserActionDialog, {
+        Modal.createTrackedDialog('Confirm User Action Dialog', 'onUnbanClick', ConfirmUserActionDialog, {
             member: this.props.member,
             action: _t('Unban'),
             danger: false,
@@ -57,7 +56,7 @@ const BannedUser = React.createClass({
                 ).catch((err) => {
                     const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
                     console.error("Failed to unban: " + err);
-                    Modal.createDialog(ErrorDialog, {
+                    Modal.createTrackedDialog('Failed to unban', '', ErrorDialog, {
                         title: _t('Error'),
                         description: _t('Failed to unban'),
                     });
@@ -67,13 +66,17 @@ const BannedUser = React.createClass({
     },
 
     render: function() {
+        let unbanButton;
+
+        if (this.props.canUnban) {
+            unbanButton = <AccessibleButton className="mx_RoomSettings_unbanButton" onClick={this._onUnbanClick}>
+                { _t('Unban') }
+            </AccessibleButton>;
+        }
+
         return (
             <li>
-                <AccessibleButton className="mx_RoomSettings_unbanButton"
-                    onClick={this._onUnbanClick}
-                >
-                    { _t('Unban') }
-                </AccessibleButton>
+                { unbanButton }
                 <strong>{this.props.member.name}</strong> {this.props.member.userId}
                 {this.props.reason ? " " +_t('Reason') + ": " + this.props.reason : ""}
             </li>
@@ -87,7 +90,6 @@ module.exports = React.createClass({
     propTypes: {
         room: React.PropTypes.object.isRequired,
         onSaveClick: React.PropTypes.func,
-        onCancelClick: React.PropTypes.func,
     },
 
     getInitialState: function() {
@@ -113,14 +115,10 @@ module.exports = React.createClass({
             // Default to false if it's undefined, otherwise react complains about changing
             // components from uncontrolled to controlled
             isRoomPublished: this._originalIsRoomPublished || false,
-            scalar_error: null,
-            showIntegrationsError: false,
         };
     },
 
     componentWillMount: function() {
-        ScalarMessaging.startListening();
-
         MatrixClientPeg.get().on("RoomMember.membership", this._onRoomMemberMembership);
 
         MatrixClientPeg.get().getRoomDirectoryVisibility(
@@ -132,18 +130,6 @@ module.exports = React.createClass({
             console.error("Failed to get room visibility: " + err);
         });
 
-        this.scalarClient = null;
-        if (SdkConfig.get().integrations_ui_url && SdkConfig.get().integrations_rest_url) {
-            this.scalarClient = new ScalarAuthClient();
-            this.scalarClient.connect().done(() => {
-                this.forceUpdate();
-            }, (err) => {
-                this.setState({
-                    scalar_error: err
-                });
-            });
-        }
-
         dis.dispatch({
             action: 'ui_opacity',
             sideOpacity: 0.3,
@@ -152,8 +138,6 @@ module.exports = React.createClass({
     },
 
     componentWillUnmount: function() {
-        ScalarMessaging.stopListening();
-
         const cli = MatrixClientPeg.get();
         if (cli) {
             cli.removeListener("RoomMember.membership", this._onRoomMemberMembership);
@@ -178,8 +162,14 @@ module.exports = React.createClass({
         });
     },
 
+    /**
+     * Returns a promise which resolves once all of the save operations have completed or failed.
+     *
+     * The result is a list of promise state snapshots, each with the form
+     * `{ state: "fulfilled", value: v }` or `{ state: "rejected", reason: r }`.
+     */
     save: function() {
-        var stateWasSetDefer = q.defer();
+        var stateWasSetDefer = Promise.defer();
         // the caller may have JUST called setState on stuff, so we need to re-render before saving
         // else we won't use the latest values of things.
         // We can be a bit cheeky here and set a loading flag, and listen for the callback on that
@@ -189,8 +179,18 @@ module.exports = React.createClass({
             this.setState({ _loading: false});
         });
 
+        function mapPromiseToSnapshot(p) {
+            return p.then((r) => {
+                return { state: "fulfilled", value: r };
+            }, (e) => {
+                return { state: "rejected", reason: e };
+            });
+        }
+
         return stateWasSetDefer.promise.then(() => {
-            return q.allSettled(this._calcSavePromises());
+            return Promise.all(
+                this._calcSavePromises().map(mapPromiseToSnapshot),
+            );
         });
     },
 
@@ -277,7 +277,7 @@ module.exports = React.createClass({
         // color scheme
         var p;
         p = this.saveColor();
-        if (!q.isFulfilled(p)) {
+        if (!p.isFulfilled()) {
             promises.push(p);
         }
 
@@ -289,7 +289,7 @@ module.exports = React.createClass({
 
         // encryption
         p = this.saveEnableEncryption();
-        if (!q.isFulfilled(p)) {
+        if (!p.isFulfilled()) {
             promises.push(p);
         }
 
@@ -300,25 +300,25 @@ module.exports = React.createClass({
     },
 
     saveAliases: function() {
-        if (!this.refs.alias_settings) { return [q()]; }
+        if (!this.refs.alias_settings) { return [Promise.resolve()]; }
         return this.refs.alias_settings.saveSettings();
     },
 
     saveColor: function() {
-        if (!this.refs.color_settings) { return q(); }
+        if (!this.refs.color_settings) { return Promise.resolve(); }
         return this.refs.color_settings.saveSettings();
     },
 
     saveUrlPreviewSettings: function() {
-        if (!this.refs.url_preview_settings) { return q(); }
+        if (!this.refs.url_preview_settings) { return Promise.resolve(); }
         return this.refs.url_preview_settings.saveSettings();
     },
 
     saveEnableEncryption: function() {
-        if (!this.refs.encrypt) { return q(); }
+        if (!this.refs.encrypt) { return Promise.resolve(); }
 
         var encrypt = this.refs.encrypt.checked;
-        if (!encrypt) { return q(); }
+        if (!encrypt) { return Promise.resolve(); }
 
         var roomId = this.props.room.roomId;
         return MatrixClientPeg.get().sendStateEvent(
@@ -402,7 +402,7 @@ module.exports = React.createClass({
         ev.preventDefault();
         var value = ev.target.value;
 
-        Modal.createDialog(QuestionDialog, {
+        Modal.createTrackedDialog('Privacy warning', '', QuestionDialog, {
             title: _t('Privacy warning'),
             description:
                 <div>
@@ -492,28 +492,6 @@ module.exports = React.createClass({
                 roomState.mayClientSendStateEvent("m.room.guest_access", cli));
     },
 
-    onManageIntegrations(ev) {
-        ev.preventDefault();
-        var IntegrationsManager = sdk.getComponent("views.settings.IntegrationsManager");
-        Modal.createDialog(IntegrationsManager, {
-            src: (this.scalarClient !== null && this.scalarClient.hasCredentials()) ?
-                    this.scalarClient.getScalarInterfaceUrlForRoom(this.props.room.roomId) :
-                    null,
-            onFinished: ()=>{
-                if (this._calcSavePromises().length === 0) {
-                    this.props.onCancelClick(ev);
-                }
-            },
-        }, "mx_IntegrationsManager");
-    },
-
-    onShowIntegrationsError(ev) {
-        ev.preventDefault();
-        this.setState({
-            showIntegrationsError: !this.state.showIntegrationsError,
-        });
-    },
-
     onLeaveClick() {
         dis.dispatch({
             action: 'leave_room',
@@ -528,7 +506,7 @@ module.exports = React.createClass({
         }, function(err) {
             var errCode = err.errcode || _t('unknown error code');
             var ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
-            Modal.createDialog(ErrorDialog, {
+            Modal.createTrackedDialog('Failed to forget room', '', ErrorDialog, {
                 title: _t('Error'),
                 description: _t("Failed to forget room %(errCode)s", { errCode: errCode }),
             });
@@ -539,7 +517,7 @@ module.exports = React.createClass({
         if (!this.refs.encrypt.checked) return;
 
         var QuestionDialog = sdk.getComponent("dialogs.QuestionDialog");
-        Modal.createDialog(QuestionDialog, {
+        Modal.createTrackedDialog('E2E Enable Warning', '', QuestionDialog, {
             title: _t('Warning!'),
             description: (
                 <div>
@@ -667,6 +645,7 @@ module.exports = React.createClass({
         const banned = this.props.room.getMembersWithMembership("ban");
         let bannedUsersSection;
         if (banned.length) {
+            const canBanUsers = current_user_level >= ban_level;
             bannedUsersSection =
                 <div>
                     <h3>{ _t('Banned users') }</h3>
@@ -674,7 +653,7 @@ module.exports = React.createClass({
                         {banned.map(function(member) {
                             const banEvent = member.events.member.getContent();
                             return (
-                                <BannedUser key={member.userId} member={member} reason={banEvent.reason} />
+                                <BannedUser key={member.userId} canUnban={canBanUsers} member={member} reason={banEvent.reason} />
                             );
                         })}
                     </ul>
@@ -774,46 +753,10 @@ module.exports = React.createClass({
                 </div>;
         }
 
-        let integrationsButton;
-        let integrationsError;
-
-        if (this.scalarClient !== null) {
-            if (this.state.showIntegrationsError && this.state.scalar_error) {
-                console.error(this.state.scalar_error);
-                integrationsError = (
-                    <span className="mx_RoomSettings_integrationsButton_errorPopup">
-                        { _t('Could not connect to the integration server') }
-                    </span>
-                );
-            }
-
-            if (this.scalarClient.hasCredentials()) {
-                integrationsButton = (
-                    <div className="mx_RoomSettings_integrationsButton" onClick={ this.onManageIntegrations }>
-                        { _t('Manage Integrations') }
-                    </div>
-                );
-            } else if (this.state.scalar_error) {
-                integrationsButton = (
-                    <div className="mx_RoomSettings_integrationsButton_error" onClick={ this.onShowIntegrationsError }>
-                        Integrations Error <img src="img/warning.svg" width="17"/>
-                        { integrationsError }
-                    </div>
-                );
-            } else {
-                integrationsButton = (
-                    <div className="mx_RoomSettings_integrationsButton" style={{opacity: 0.5}}>
-                        { _t('Manage Integrations') }
-                    </div>
-                );
-            }
-        }
-
         return (
             <div className="mx_RoomSettings">
 
                 { leaveButton }
-                { integrationsButton }
 
                 { tagsSection }
 
@@ -849,7 +792,7 @@ module.exports = React.createClass({
                             <input type="checkbox" disabled={ !roomState.mayClientSendStateEvent("m.room.aliases", cli) }
                                    onChange={ this._onToggle.bind(this, "isRoomPublished", true, false)}
                                    checked={this.state.isRoomPublished}/>
-                            {_t("List this room in %(domain)s's room directory?", { domain: MatrixClientPeg.get().getDomain() })}
+                            {_t("Publish this room to the public in %(domain)s's room directory?", { domain: MatrixClientPeg.get().getDomain() })}
                         </label>
                     </div>
                     <div className="mx_RoomSettings_settings">

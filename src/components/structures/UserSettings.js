@@ -21,7 +21,8 @@ const MatrixClientPeg = require("../../MatrixClientPeg");
 const PlatformPeg = require("../../PlatformPeg");
 const Modal = require('../../Modal');
 const dis = require("../../dispatcher");
-const q = require('q');
+import sessionStore from '../../stores/SessionStore';
+import Promise from 'bluebird';
 const packageJson = require('../../../package.json');
 const UserSettingsStore = require('../../UserSettingsStore');
 const CallMediaHandler = require('../../CallMediaHandler');
@@ -81,6 +82,14 @@ const SETTINGS_LABELS = [
         label: 'Show timestamps in 12 hour format (e.g. 2:30pm)',
     },
     {
+        id: 'hideJoinLeaves',
+        label: 'Hide join/leave messages (invites/kicks/bans unaffected)',
+    },
+    {
+        id: 'hideAvatarDisplaynameChanges',
+        label: 'Hide avatar and display name changes',
+    },
+    {
         id: 'useCompactLayout',
         label: 'Use compact timeline layout',
     },
@@ -89,8 +98,16 @@ const SETTINGS_LABELS = [
         label: 'Hide removed messages',
     },
     {
-        id: 'disableMarkdown',
-        label: 'Disable markdown formatting',
+        id: 'enableSyntaxHighlightLanguageDetection',
+        label: 'Enable automatic language detection for syntax highlighting',
+    },
+    {
+        id: 'MessageComposerInput.autoReplaceEmoji',
+        label: 'Automatically replace plain text Emoji',
+    },
+    {
+        id: 'Pill.shouldHidePillAvatar',
+        label: 'Hide avatars in user and room mentions',
     },
 /*
     {
@@ -169,9 +186,6 @@ module.exports = React.createClass({
         // The base URL to use in the referral link. Defaults to window.location.origin.
         referralBaseUrl: React.PropTypes.string,
 
-        // true if RightPanel is collapsed
-        collapsedRhs: React.PropTypes.bool,
-
         // Team token for the referral link. If falsy, the referral section will
         // not appear
         teamToken: React.PropTypes.string,
@@ -201,7 +215,7 @@ module.exports = React.createClass({
         this._addThreepid = null;
 
         if (PlatformPeg.get()) {
-            q().then(() => {
+            Promise.resolve().then(() => {
                 return PlatformPeg.get().getAppVersion();
             }).done((appVersion) => {
                 if (this._unmounted) return;
@@ -246,6 +260,12 @@ module.exports = React.createClass({
         this.setState({
             language: languageHandler.getCurrentLanguage(),
         });
+
+        this._sessionStore = sessionStore;
+        this._sessionStoreToken = this._sessionStore.addListener(
+            this._setStateFromSessionStore,
+        );
+        this._setStateFromSessionStore();
     },
 
     componentDidMount: function() {
@@ -272,12 +292,28 @@ module.exports = React.createClass({
         }
     },
 
+    // `UserSettings` assumes that the client peg will not be null, so give it some
+    // sort of assurance here by only allowing a re-render if the client is truthy.
+    //
+    // This is required because `UserSettings` maintains its own state and if this state
+    // updates (e.g. during _setStateFromSessionStore) after the client peg has been made
+    // null (during logout), then it will attempt to re-render and throw errors.
+    shouldComponentUpdate: function() {
+        return Boolean(MatrixClientPeg.get());
+    },
+
+    _setStateFromSessionStore: function() {
+        this.setState({
+            userHasGeneratedPassword: Boolean(this._sessionStore.getCachedPassword()),
+        });
+    },
+
     _electronSettings: function(ev, settings) {
         this.setState({ electron_settings: settings });
     },
 
     _refreshMediaDevices: function() {
-        q().then(() => {
+        Promise.resolve().then(() => {
             return CallMediaHandler.getDevices();
         }).then((mediaDevices) => {
             // console.log("got mediaDevices", mediaDevices, this._unmounted);
@@ -292,7 +328,7 @@ module.exports = React.createClass({
 
     _refreshFromServer: function() {
         const self = this;
-        q.all([
+        Promise.all([
             UserSettingsStore.loadProfileInfo(), UserSettingsStore.loadThreePids(),
         ]).done(function(resps) {
             self.setState({
@@ -303,7 +339,7 @@ module.exports = React.createClass({
         }, function(error) {
             const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
             console.error("Failed to load user settings: " + error);
-            Modal.createDialog(ErrorDialog, {
+            Modal.createTrackedDialog('Can\'t load user settings', '', ErrorDialog, {
                 title: _t("Can't load user settings"),
                 description: ((error && error.message) ? error.message : _t("Server may be unavailable or overloaded")),
             });
@@ -336,7 +372,7 @@ module.exports = React.createClass({
             // const errMsg = (typeof err === "string") ? err : (err.error || "");
             console.error("Failed to set avatar: " + err);
             const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
-            Modal.createDialog(ErrorDialog, {
+            Modal.createTrackedDialog('Failed to set avatar', '', ErrorDialog, {
                 title: _t("Failed to set avatar."),
                 description: ((err && err.message) ? err.message : _t("Operation failed")),
             });
@@ -345,7 +381,7 @@ module.exports = React.createClass({
 
     onLogoutClicked: function(ev) {
         const QuestionDialog = sdk.getComponent("dialogs.QuestionDialog");
-        Modal.createDialog(QuestionDialog, {
+        Modal.createTrackedDialog('Logout E2E Export', '', QuestionDialog, {
             title: _t("Sign out"),
             description:
                 <div>
@@ -381,7 +417,7 @@ module.exports = React.createClass({
         }
         const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
         console.error("Failed to change password: " + errMsg);
-        Modal.createDialog(ErrorDialog, {
+        Modal.createTrackedDialog('Failed to change password', '', ErrorDialog, {
             title: _t("Error"),
             description: errMsg,
         });
@@ -389,7 +425,7 @@ module.exports = React.createClass({
 
     onPasswordChanged: function() {
         const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
-        Modal.createDialog(ErrorDialog, {
+        Modal.createTrackedDialog('Password changed', '', ErrorDialog, {
             title: _t("Success"),
             description: _t(
                 "Your password was successfully changed. You will not receive " +
@@ -414,7 +450,7 @@ module.exports = React.createClass({
 
         const emailAddress = this.refs.add_email_input.value;
         if (!Email.looksValid(emailAddress)) {
-            Modal.createDialog(ErrorDialog, {
+            Modal.createTrackedDialog('Invalid email address', '', ErrorDialog, {
                 title: _t("Invalid Email Address"),
                 description: _t("This doesn't appear to be a valid email address"),
             });
@@ -424,7 +460,7 @@ module.exports = React.createClass({
         // we always bind emails when registering, so let's do the
         // same here.
         this._addThreepid.addEmailAddress(emailAddress, true).done(() => {
-            Modal.createDialog(QuestionDialog, {
+            Modal.createTrackedDialog('Verification Pending', '', QuestionDialog, {
                 title: _t("Verification Pending"),
                 description: _t(
                     "Please check your email and click on the link it contains. Once this " +
@@ -436,7 +472,7 @@ module.exports = React.createClass({
         }, (err) => {
             this.setState({email_add_pending: false});
             console.error("Unable to add email address " + emailAddress + " " + err);
-            Modal.createDialog(ErrorDialog, {
+            Modal.createTrackedDialog('Unable to add email address', '', ErrorDialog, {
                 title: _t("Unable to add email address"),
                 description: ((err && err.message) ? err.message : _t("Operation failed")),
             });
@@ -447,7 +483,7 @@ module.exports = React.createClass({
 
     onRemoveThreepidClicked: function(threepid) {
         const QuestionDialog = sdk.getComponent("dialogs.QuestionDialog");
-        Modal.createDialog(QuestionDialog, {
+        Modal.createTrackedDialog('Remove 3pid', '', QuestionDialog, {
             title: _t("Remove Contact Information?"),
             description: _t("Remove %(threePid)s?", { threePid: threepid.address }),
             button: _t('Remove'),
@@ -461,7 +497,7 @@ module.exports = React.createClass({
                     }).catch((err) => {
                         const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
                         console.error("Unable to remove contact information: " + err);
-                        Modal.createDialog(ErrorDialog, {
+                        Modal.createTrackedDialog('Remove 3pid failed', '', ErrorDialog, {
                             title: _t("Unable to remove contact information"),
                             description: ((err && err.message) ? err.message : _t("Operation failed")),
                         });
@@ -493,7 +529,7 @@ module.exports = React.createClass({
                 const QuestionDialog = sdk.getComponent("dialogs.QuestionDialog");
                 const message = _t("Unable to verify email address.") + " " +
                     _t("Please check your email and click on the link it contains. Once this is done, click continue.");
-                Modal.createDialog(QuestionDialog, {
+                Modal.createTrackedDialog('Verification Pending', '', QuestionDialog, {
                     title: _t("Verification Pending"),
                     description: message,
                     button: _t('Continue'),
@@ -502,7 +538,7 @@ module.exports = React.createClass({
             } else {
                 const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
                 console.error("Unable to verify email address: " + err);
-                Modal.createDialog(ErrorDialog, {
+                Modal.createTrackedDialog('Unable to verify email address', '', ErrorDialog, {
                     title: _t("Unable to verify email address."),
                     description: ((err && err.message) ? err.message : _t("Operation failed")),
                 });
@@ -512,7 +548,7 @@ module.exports = React.createClass({
 
     _onDeactivateAccountClicked: function() {
         const DeactivateAccountDialog = sdk.getComponent("dialogs.DeactivateAccountDialog");
-        Modal.createDialog(DeactivateAccountDialog, {});
+        Modal.createTrackedDialog('Deactivate Account', '', DeactivateAccountDialog, {});
     },
 
     _onBugReportClicked: function() {
@@ -520,7 +556,7 @@ module.exports = React.createClass({
         if (!BugReportDialog) {
             return;
         }
-        Modal.createDialog(BugReportDialog, {});
+        Modal.createTrackedDialog('Bug Report Dialog', '', BugReportDialog, {});
     },
 
     _onClearCacheClicked: function() {
@@ -544,39 +580,36 @@ module.exports = React.createClass({
         });
         // reject the invites
         const promises = rooms.map((room) => {
-            return MatrixClientPeg.get().leave(room.roomId);
+            return MatrixClientPeg.get().leave(room.roomId).catch((e) => {
+                // purposefully drop errors to the floor: we'll just have a non-zero number on the UI
+                // after trying to reject all the invites.
+            });
         });
-        // purposefully drop errors to the floor: we'll just have a non-zero number on the UI
-        // after trying to reject all the invites.
-        q.allSettled(promises).then(() => {
+        Promise.all(promises).then(() => {
             this.setState({
                 rejectingInvites: false,
             });
-        }).done();
+        });
     },
 
     _onExportE2eKeysClicked: function() {
-        Modal.createDialogAsync(
-            (cb) => {
-                require.ensure(['../../async-components/views/dialogs/ExportE2eKeysDialog'], () => {
-                    cb(require('../../async-components/views/dialogs/ExportE2eKeysDialog'));
-                }, "e2e-export");
-            }, {
-                matrixClient: MatrixClientPeg.get(),
-            },
-        );
+        Modal.createTrackedDialogAsync('Export E2E Keys', '', (cb) => {
+            require.ensure(['../../async-components/views/dialogs/ExportE2eKeysDialog'], () => {
+                cb(require('../../async-components/views/dialogs/ExportE2eKeysDialog'));
+            }, "e2e-export");
+        }, {
+            matrixClient: MatrixClientPeg.get(),
+        });
     },
 
     _onImportE2eKeysClicked: function() {
-        Modal.createDialogAsync(
-            (cb) => {
-                require.ensure(['../../async-components/views/dialogs/ImportE2eKeysDialog'], () => {
-                    cb(require('../../async-components/views/dialogs/ImportE2eKeysDialog'));
-                }, "e2e-export");
-            }, {
-                matrixClient: MatrixClientPeg.get(),
-            },
-        );
+        Modal.createTrackedDialogAsync('Import E2E Keys', '', (cb) => {
+            require.ensure(['../../async-components/views/dialogs/ImportE2eKeysDialog'], () => {
+                cb(require('../../async-components/views/dialogs/ImportE2eKeysDialog'));
+            }, "e2e-export");
+        }, {
+            matrixClient: MatrixClientPeg.get(),
+        });
     },
 
     _renderReferral: function() {
@@ -622,6 +655,10 @@ module.exports = React.createClass({
     },
 
     _renderUserInterfaceSettings: function() {
+        // TODO: this ought to be a separate component so that we don't need
+        // to rebind the onChange each time we render
+        const onChange = (e) =>
+            UserSettingsStore.setLocalSetting('autocompleteDelay', + e.target.value);
         return (
             <div>
                 <h3>{ _t("User Interface") }</h3>
@@ -629,8 +666,21 @@ module.exports = React.createClass({
                     { this._renderUrlPreviewSelector() }
                     { SETTINGS_LABELS.map( this._renderSyncedSetting ) }
                     { THEMES.map( this._renderThemeSelector ) }
+                    <table>
+                        <tbody>
+                        <tr>
+                            <td><strong>{_t('Autocomplete Delay (ms):')}</strong></td>
+                            <td>
+                                <input
+                                    type="number"
+                                    defaultValue={UserSettingsStore.getLocalSetting('autocompleteDelay', 200)}
+                                    onChange={onChange}
+                                />
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
                     { this._renderLanguageSetting() }
-
                 </div>
             </div>
         );
@@ -809,7 +859,13 @@ module.exports = React.createClass({
         if (this.props.enableLabs === false) return null;
         UserSettingsStore.doTranslations();
 
-        const features = UserSettingsStore.LABS_FEATURES.map((feature) => {
+        const features = [];
+        UserSettingsStore.LABS_FEATURES.forEach((feature) => {
+            // This feature has an override and will be set to the default, so do not
+            // show it here.
+            if (feature.override) {
+                return;
+            }
             // TODO: this ought to be a separate component so that we don't need
             // to rebind the onChange each time we render
             const onChange = (e) => {
@@ -817,7 +873,7 @@ module.exports = React.createClass({
                 this.forceUpdate();
             };
 
-            return (
+            features.push(
                 <div key={feature.id} className="mx_UserSettings_toggle">
                     <input
                         type="checkbox"
@@ -827,9 +883,14 @@ module.exports = React.createClass({
                         onChange={ onChange }
                     />
                     <label htmlFor={feature.id}>{feature.name}</label>
-                </div>
-            );
+                </div>);
         });
+
+        // No labs section when there are no features in labs
+        if (features.length === 0) {
+            return null;
+        }
+
         return (
             <div>
                 <h3>{ _t("Labs") }</h3>
@@ -862,6 +923,21 @@ module.exports = React.createClass({
                     </AccessibleButton>
                 </div>
         </div>;
+    },
+
+    _renderCheckUpdate: function() {
+        const platform = PlatformPeg.get();
+        if ('canSelfUpdate' in platform && platform.canSelfUpdate() && 'startUpdateCheck' in platform) {
+            return <div>
+                <h3>{_t('Updates')}</h3>
+                <div className="mx_UserSettings_section">
+                    <AccessibleButton className="mx_UserSettings_button" onClick={platform.startUpdateCheck}>
+                        {_t('Check for update')}
+                    </AccessibleButton>
+                </div>
+            </div>;
+        }
+        return <div />;
     },
 
     _renderBulkOptions: function() {
@@ -943,7 +1019,7 @@ module.exports = React.createClass({
                 this._refreshMediaDevices,
                 function() {
                     const ErrorDialog = sdk.getComponent('dialogs.ErrorDialog');
-                    Modal.createDialog(ErrorDialog, {
+                    Modal.createTrackedDialog('No media permissions', '', ErrorDialog, {
                         title: _t('No media permissions'),
                         description: _t('You may need to manually permit Riot to access your microphone/webcam'),
                     });
@@ -1079,7 +1155,7 @@ module.exports = React.createClass({
 
         const threepidsSection = this.state.threepids.map((val, pidIndex) => {
             const id = "3pid-" + val.address;
-            // TODO; make a separate component to avoid having to rebind onClick
+            // TODO: make a separate component to avoid having to rebind onClick
             // each time we render
             const onRemoveClick = (e) => this.onRemoveThreepidClicked(val);
             return (
@@ -1164,7 +1240,6 @@ module.exports = React.createClass({
             <div className="mx_UserSettings">
                 <SimpleRoomHeader
                     title={ _t("Settings") }
-                    collapsedRhs={ this.props.collapsedRhs }
                     onCancelClick={ this.props.onClose }
                 />
 
@@ -1205,10 +1280,14 @@ module.exports = React.createClass({
                 <h3>{ _t("Account") }</h3>
 
                 <div className="mx_UserSettings_section cadcampoHide">
-
                     <AccessibleButton className="mx_UserSettings_logout mx_UserSettings_button" onClick={this.onLogoutClicked}>
                         { _t("Sign out") }
                     </AccessibleButton>
+                    { this.state.userHasGeneratedPassword ?
+                        <div className="mx_UserSettings_passwordWarning">
+                            { _t("To return to your account in future you need to set a password") }
+                        </div> : null
+                    }
 
                     {accountJsx}
                 </div>
@@ -1261,6 +1340,8 @@ module.exports = React.createClass({
                         { _t("olm version:") } {olmVersionString}<br/>
                     </div>
                 </div>
+
+                {this._renderCheckUpdate()}
 
                 {this._renderClearCache()}
 
