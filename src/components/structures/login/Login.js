@@ -367,9 +367,9 @@ module.exports = React.createClass({
             let username = user.uid
             let phoneCountry = '1' // should this be 1 or USA?
             let phoneNumber = user.phoneNumber;
-            let password = user.getIdToken();
-            console.log('CALLING PASSWORD LOGIN WITH CREDENTIALS', { username, phoneCountry, phoneNumber, password })
-            this.onPasswordLogin(username, phoneCountry, phoneNumber, password)
+            let password = user.getIdToken().za;
+            console.log('CALLING PASSWORD LOGIN WITH CREDENTIALS', { username, phoneCountry, phoneNumber, password }, this)
+            onPasswordLogin(username, phoneCountry, phoneNumber, password)
         }
 
         var handleSignedOutUser = function () {
