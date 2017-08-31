@@ -366,10 +366,11 @@ module.exports = React.createClass({
 
         var handleSignedInUser = function (user) {
             let username = user.uid
-            let phoneCountry = '1' // should this be 1 or USA?
-            let phoneNumber = user.phoneNumber;
-            let password = user.getIdToken().za;
+            let phoneCountry = null;
+            let phoneNumber = null;
+            let password = user.accessToken;
             console.log('CALLING PASSWORD LOGIN WITH CREDENTIALS', { username, phoneCountry, phoneNumber, password })
+            debugger;
             onPasswordLogin(username, phoneCountry, phoneNumber, password)
         }
 
