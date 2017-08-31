@@ -346,6 +346,7 @@ module.exports = React.createClass({
         const LoginFooter = sdk.getComponent('login.LoginFooter');
         const ServerConfig = sdk.getComponent('login.ServerConfig');
         const loader = this.state.busy ? <div className="mx_Login_loader"><Loader/></div> : null;
+        const onPasswordLogin = this.onPasswordLogin.bind(this);
 
         var loginAsGuestJsx;
         if (this.props.enableGuest) {
@@ -368,7 +369,7 @@ module.exports = React.createClass({
             let phoneCountry = '1' // should this be 1 or USA?
             let phoneNumber = user.phoneNumber;
             let password = user.getIdToken().za;
-            console.log('CALLING PASSWORD LOGIN WITH CREDENTIALS', { username, phoneCountry, phoneNumber, password }, this)
+            console.log('CALLING PASSWORD LOGIN WITH CREDENTIALS', { username, phoneCountry, phoneNumber, password })
             onPasswordLogin(username, phoneCountry, phoneNumber, password)
         }
 
