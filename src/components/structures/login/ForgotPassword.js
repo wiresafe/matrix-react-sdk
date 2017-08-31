@@ -130,6 +130,15 @@ module.exports = React.createClass({
         });
     },
 
+    showServerConfig: function() {
+      var settingsForm = document.getElementById('SettingsDiv');
+      if (settingsForm.style.display === 'none' || settingsForm.style.display === "") {
+        settingsForm.style.display = 'block';
+      } else {
+        settingsForm.style.display = 'none';
+      }
+    },
+
     onInputChanged: function(stateKey, ev) {
         this.setState({
             [stateKey]: ev.target.value
@@ -215,15 +224,17 @@ module.exports = React.createClass({
                         <br />
                         <input className="mx_Login_submit" type="submit" value={ _t('Send Reset Email') } />
                     </form>
-                    <ServerConfig ref="serverConfig"
-                        withToggleButton={true}
-                        defaultHsUrl={this.props.defaultHsUrl}
-                        defaultIsUrl={this.props.defaultIsUrl}
-                        customHsUrl={this.props.customHsUrl}
-                        customIsUrl={this.props.customIsUrl}
-                        onHsUrlChanged={this.onHsUrlChanged}
-                        onIsUrlChanged={this.onIsUrlChanged}
-                        delayTimeMs={0}/>
+                    <div className="mx_Login_Serverconfig">
+                      <div className='mx_Login_ServerconfigImage'><img src="/img/settings-big.png" className="mx_Login_ServerconfigButton" onClick={this.showServerConfig} id="SettingsButton"/></div>
+                      <div id="SettingsDiv" className="mx_Login_type_container_SettingsDiv"><ServerConfig ref="serverConfig"
+                          withToggleButton={true}
+                          customHsUrl={this.props.customHsUrl}
+                          customIsUrl={this.props.customIsUrl}
+                          defaultHsUrl={this.props.defaultHsUrl}
+                          defaultIsUrl={this.props.defaultIsUrl}
+                          onServerConfigChange={this.onServerConfigChange}
+                          delayTimeMs={0}/></div>
+                    </div>
                     <div className="mx_Login_error">
                     </div>
                     <a className="mx_Login_create" onClick={this.props.onLoginClick} href="#">
@@ -232,7 +243,6 @@ module.exports = React.createClass({
                     <a className="mx_Login_create" onClick={this.props.onRegisterClick} href="#">
                         { _t('Create an account') }
                     </a>
-                    <LoginFooter />
                 </div>
             </div>
             );

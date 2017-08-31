@@ -62,7 +62,7 @@ module.exports = React.createClass({
         var LoginHeader = sdk.getComponent('login.LoginHeader');
         return (
             <div className="mx_Login">
-                <div className="mx_Login_box">
+                <div className="mx_Login_box_postRegister">
                     <LoginHeader />
                     <div className="mx_Login_profile">
                         { _t('Set a display name:') }

@@ -124,7 +124,7 @@ module.exports = React.createClass({
                 return;
             }
             this.setState({
-                busy: false,
+                busy: false
             });
         }).done();
     },
@@ -275,6 +275,15 @@ module.exports = React.createClass({
         return errorText;
     },
 
+    showServerConfig: function() {
+      var settingsForm = document.getElementById('SettingsDiv');
+      if (settingsForm.style.display === 'none' || settingsForm.style.display === "") {
+        settingsForm.style.display = 'block';
+      } else {
+        settingsForm.style.display = 'none';
+      }
+    },
+
     componentForStep: function(step) {
         switch (step) {
             case 'm.login.password':
@@ -354,18 +363,10 @@ module.exports = React.createClass({
                 <div className="mx_Login_box">
                     <LoginHeader />
                     <div>
-                        <h2>{ _t('Sign in')}
+                        <h2>
                             { loader }
                         </h2>
                         { this.componentForStep(this.state.currentFlow) }
-                        <ServerConfig ref="serverConfig"
-                            withToggleButton={true}
-                            customHsUrl={this.props.customHsUrl}
-                            customIsUrl={this.props.customIsUrl}
-                            defaultHsUrl={this.props.defaultHsUrl}
-                            defaultIsUrl={this.props.defaultIsUrl}
-                            onServerConfigChange={this.onServerConfigChange}
-                            delayTimeMs={1000}/>
                         <div className="mx_Login_error">
                                 { this.state.errorText }
                         </div>
@@ -377,6 +378,17 @@ module.exports = React.createClass({
                         { this._renderLanguageSetting() }
                         <LoginFooter />
                     </div>
+                </div>
+                <div className="mx_Login_Serverconfig">
+                  <div className='mx_Login_ServerconfigImage'><img src="/img/settings-big.png" className="mx_Login_ServerconfigButton" onClick={this.showServerConfig} id="SettingsButton"/></div>
+                  <div id="SettingsDiv" className="mx_Login_type_container_SettingsDiv"><ServerConfig ref="serverConfig"
+                      withToggleButton={true}
+                      customHsUrl={this.props.customHsUrl}
+                      customIsUrl={this.props.customIsUrl}
+                      defaultHsUrl={this.props.defaultHsUrl}
+                      defaultIsUrl={this.props.defaultIsUrl}
+                      onServerConfigChange={this.onServerConfigChange}
+                      delayTimeMs={1000}/></div>
                 </div>
             </div>
         );

@@ -176,13 +176,37 @@ module.exports = React.createClass({
                         showSupportEmail: false,
                     });
                 }
-                const emailValid = email === '' || Email.looksValid(email);
-                this.markFieldValid(field_id, emailValid, "RegistrationForm.ERR_EMAIL_INVALID");
+                const emailValid = Email.looksValid(email);
+                if (email == '') {
+                  this.markFieldValid(
+                      field_id,
+                      false,
+                      "RegistrationForm.ERR_EMAIL_BLANK"
+                  );
+                }
+                else if(emailValid == false){
+                  this.markFieldValid(field_id, emailValid, "RegistrationForm.ERR_EMAIL_INVALID");
+                }
+                else{
+                  this.markFieldValid(field_id, true);
+                }
                 break;
             case FIELD_PHONE_NUMBER:
                 const phoneNumber = this.refs.phoneNumber.value;
-                const phoneNumberValid = phoneNumber === '' || phoneNumberLooksValid(phoneNumber);
-                this.markFieldValid(field_id, phoneNumberValid, "RegistrationForm.ERR_PHONE_NUMBER_INVALID");
+                const phoneNumberValid = phoneNumberLooksValid(phoneNumber);
+                if (phoneNumber == '') {
+                  this.markFieldValid(
+                      field_id,
+                      false,
+                      "RegistrationForm.ERR_PHONENUMBER_BLANK"
+                  );
+                }
+                else if(phoneNumberValid == false){
+                  this.markFieldValid(field_id, phoneNumberValid, "RegistrationForm.ERR_PHONE_NUMBER_INVALID");
+                }
+                else{
+                  this.markFieldValid(field_id, true);
+                }
                 break;
             case FIELD_USERNAME:
                 // XXX: SPEC-1
@@ -276,7 +300,7 @@ module.exports = React.createClass({
         const emailSection = (
             <div>
                 <input type="text" ref="email"
-                    autoFocus={true} placeholder={_t("Email address (optional)")}
+                    autoFocus={false} placeholder={_t("Email address")}
                     defaultValue={this.props.defaultEmail}
                     className={this._classForField(FIELD_EMAIL, 'mx_Login_field')}
                     onBlur={function() {self.validateField(FIELD_EMAIL);}}
@@ -315,7 +339,7 @@ module.exports = React.createClass({
                     showPrefix={true}
                 />
                 <input type="text" ref="phoneNumber"
-                    placeholder={_t("Mobile phone number (optional)")}
+                    placeholder={_t("Mobile phone number")}
                     defaultValue={this.props.defaultPhoneNumber}
                     className={this._classForField(
                         FIELD_PHONE_NUMBER,
