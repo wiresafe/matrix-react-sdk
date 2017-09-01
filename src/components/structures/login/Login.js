@@ -77,12 +77,13 @@ module.exports = React.createClass({
     componentWillMount: function () {
         this._unmounted = false;
         this._initLoginLogic();
+        const self = this;
 
         // Listen to change in auth state so it displays the correct UI for when
         // the user is signed in or not.
         firebase.auth().onAuthStateChanged(function (user) {
-            user ? this.handleSignedInUser(user) : this.handleSignedOutUser();}
-        )
+            user ? self.handleSignedInUser(user) : self.handleSignedOutUser();
+        })
 
     },
 
@@ -96,8 +97,7 @@ module.exports = React.createClass({
         let phoneNumber = null;
         let password = user.accessToken;
         console.log('CALLING PASSWORD LOGIN WITH CREDENTIALS', { username, phoneCountry, phoneNumber, password })
-        debugger;
-        onPasswordLogin(username, phoneCountry, phoneNumber, password)
+        this.onPasswordLogin(username, phoneCountry, phoneNumber, password)
     },
 
     handleSignedOutUser: function () {
