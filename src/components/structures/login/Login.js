@@ -77,31 +77,38 @@ module.exports = React.createClass({
     componentWillMount: function () {
         this._unmounted = false;
         this._initLoginLogic();
-        const self = this;
+        this.firebaseAuthInit();
+    },
 
-        // Listen to change in auth state so it displays the correct UI for when
-        // the user is signed in or not.
+    firebaseAuthInit: function () {
+        const onPasswordLogin = this.onPasswordLogin;
+        // FirebaseUI config.
+        const uiConfig = {
+            signInSuccessUrl: '#/login',
+            signInOptions: [
+                firebase.auth.GoogleAuthProvider.PROVIDER_ID,
+                firebase.auth.EmailAuthProvider.PROVIDER_ID,
+            ],
+            tosUrl: 'https://wiresafe.com', // Terms of service url is required.
+        };
+        // Initialize the FirebaseUI Widget using Firebase.
+        const ui = new firebaseui.auth.AuthUI(firebase.auth());
+        ui.start('#firebaseui-auth-container', uiConfig);
+
         firebase.auth().onAuthStateChanged(function (user) {
-            user ? self.handleSignedInUser(user) : self.handleSignedOutUser();
+            if (user) {
+                user.getIdToken().then(token => {
+                    let username = user.uid;
+                    let password = token;
+                    // console.debug({ user, token, username, password })
+                    onPasswordLogin(username, null, null, password);
+                })
+            }
         })
-
     },
 
     componentWillUnmount: function () {
         this._unmounted = true;
-    },
-
-    handleSignedInUser: function (user) {
-        let username = user.uid
-        let phoneCountry = null;
-        let phoneNumber = null;
-        let password = user.accessToken;
-        console.log('CALLING PASSWORD LOGIN WITH CREDENTIALS', { username, phoneCountry, phoneNumber, password })
-        this.onPasswordLogin(username, phoneCountry, phoneNumber, password)
-    },
-
-    handleSignedOutUser: function () {
-        window.open('/home/widget.html', 'Sign In', 'width=985,height=735');
     },
 
 
@@ -122,7 +129,7 @@ module.exports = React.createClass({
             }
             let errorText;
 
-            // Some error strings only apply for logging in
+            // Some error strings only apply for logging ingils
             const usingEmail = username.indexOf('@') > 0;
             if (error.httpStatus == 400 && usingEmail) {
                 errorText = _t('This Home Server does not support login using email address.');
@@ -368,7 +375,6 @@ module.exports = React.createClass({
         const LoginFooter = sdk.getComponent('login.LoginFooter');
         const ServerConfig = sdk.getComponent('login.ServerConfig');
         const loader = this.state.busy ? <div className="mx_Login_loader"><Loader/></div> : null;
-        const onPasswordLogin = this.onPasswordLogin;
 
         var loginAsGuestJsx;
         if (this.props.enableGuest) {
