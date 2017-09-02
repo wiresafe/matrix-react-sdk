@@ -84,7 +84,16 @@ module.exports = React.createClass({
         const onPasswordLogin = this.onPasswordLogin;
         // FirebaseUI config.
         const uiConfig = {
-            signInSuccessUrl: '#/login',
+            signInSuccessUrl: '#/home',
+            'callbacks': {
+                // Called when the user has been successfully signed in.
+                'signInSuccess': function(user, credential, redirectUrl) {
+                    document.getElementById('firebaseui-auth-container').style.display = 'none'
+                    document.getElementById('matrixchat').style.display = 'block'
+                    // return false to disable the redirect
+                    // return false;
+                }
+            },
             signInOptions: [
                 firebase.auth.GoogleAuthProvider.PROVIDER_ID,
                 firebase.auth.EmailAuthProvider.PROVIDER_ID,
@@ -96,6 +105,7 @@ module.exports = React.createClass({
         ui.start('#firebaseui-auth-container', uiConfig);
 
         firebase.auth().onAuthStateChanged(function (user) {
+
             if (user) {
                 user.getIdToken().then(token => {
                     let username = user.uid;
@@ -103,6 +113,10 @@ module.exports = React.createClass({
                     // console.debug({ user, token, username, password })
                     onPasswordLogin(username, null, null, password);
                 })
+            } else {
+                document.getElementById('firebaseui-auth-container').style.display = 'block'
+                document.getElementById('firebaseui-auth-container').style.height = '100%;'
+                document.getElementById('matrixchat').style.display = 'none'
             }
         })
     },
