@@ -82,26 +82,12 @@ module.exports = React.createClass({
 
     firebaseAuthInit: function () {
         const onPasswordLogin = this.onPasswordLogin;
-        // FirebaseUI config.
-        const uiConfig = {
-            signInSuccessUrl: '#/login',
-            signInOptions: [
-                firebase.auth.GoogleAuthProvider.PROVIDER_ID,
-                firebase.auth.EmailAuthProvider.PROVIDER_ID,
-            ],
-            tosUrl: 'https://wiresafe.com', // Terms of service url is required.
-        };
-        // Initialize the FirebaseUI Widget using Firebase.
-        const ui = new firebaseui.auth.AuthUI(firebase.auth());
-        ui.start('#firebaseui-auth-container', uiConfig);
-
         firebase.auth().onAuthStateChanged(function (user) {
+            console.log('auth-stage-changed-login.js', user)
             if (user) {
                 user.getIdToken().then(token => {
                     let username = user.uid;
-                    let password = token;
-                    // console.debug({ user, token, username, password })
-                    onPasswordLogin(username, null, null, password);
+                    onPasswordLogin(username, null, null, token);
                 })
             }
         })
