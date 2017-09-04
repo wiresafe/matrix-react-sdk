@@ -82,41 +82,15 @@ module.exports = React.createClass({
 
     firebaseAuthInit: function () {
         const onPasswordLogin = this.onPasswordLogin;
-        // FirebaseUI config.
-        const uiConfig = {
-            signInSuccessUrl: '#/home',
-            'callbacks': {
-                // Called when the user has been successfully signed in.
-                'signInSuccess': function(user, credential, redirectUrl) {
-                    document.getElementById('firebaseui-auth-container').style.display = 'none'
-                    document.getElementById('matrixchat').style.display = 'block'
-                    // return false to disable the redirect
-                    // return false;
-                }
-            },
-            signInOptions: [
-                firebase.auth.GoogleAuthProvider.PROVIDER_ID,
-                firebase.auth.EmailAuthProvider.PROVIDER_ID,
-            ],
-            tosUrl: 'https://wiresafe.com', // Terms of service url is required.
-        };
-        // Initialize the FirebaseUI Widget using Firebase.
-        const ui = new firebaseui.auth.AuthUI(firebase.auth());
-        ui.start('#firebaseui-auth-container', uiConfig);
-
+        const firebase = window.firebase;
         firebase.auth().onAuthStateChanged(function (user) {
-
             if (user) {
                 user.getIdToken().then(token => {
                     let username = user.uid;
-                    let password = token;
-                    // console.debug({ user, token, username, password })
-                    onPasswordLogin(username, null, null, password);
+                    onPasswordLogin(username, null, null, token);
                 })
             } else {
-                document.getElementById('firebaseui-auth-container').style.display = 'block'
-                document.getElementById('firebaseui-auth-container').style.height = '100%;'
-                document.getElementById('matrixchat').style.display = 'none'
+                console.debug('FIREBASE_AUTH:AUTH_STATE_CHANGED:USER_SIGNED_OUT')
             }
         })
     },

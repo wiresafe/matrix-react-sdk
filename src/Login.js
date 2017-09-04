@@ -26,10 +26,7 @@ export default class Login {
         this._isUrl = isUrl;
         this._fallbackHsUrl = fallbackHsUrl;
         this._currentFlowIndex = 0;
-        this._flows = [
-            'firebase',
-            'matrix-default',
-        ];
+        this._flows = [];
         this._defaultDeviceDisplayName = opts.defaultDeviceDisplayName;
     }
 
