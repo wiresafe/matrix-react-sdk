@@ -81,18 +81,34 @@ module.exports = React.createClass({
     },
 
     firebaseAuthInit: function () {
+        console.debug('FIREBASE_AUTH:INIT')
         const onPasswordLogin = this.onPasswordLogin;
         const firebase = window.firebase;
-        firebase.auth().onAuthStateChanged(function (user) {
-            if (user) {
-                user.getIdToken().then(token => {
-                    let username = user.uid;
-                    onPasswordLogin(username, null, null, token);
-                })
-            } else {
-                console.debug('FIREBASE_AUTH:AUTH_STATE_CHANGED:USER_SIGNED_OUT')
-            }
-        })
+        const firebaseui = window.firebaseui;
+        if (firebase && firebaseui) {
+            console.debug('FIREBASE_AUTH:AUTH-UI:START')
+            ui.start('#firebase-auth-ui', getFirebaseAuthConfig())
+
+            firebase.auth().onAuthStateChanged(function (user) {
+                if (user) {
+                    console.debug(`FIREBASE_AUTH:USER_SIGNED_IN:${user.uid}`)
+                    user.getIdToken().then(token => {
+                        let container = document.getElementById('firebase-auth-container');
+                        console.debug('FIREBASE_AUTH:PASSWORD_LOGIN')
+                        container.style.zIndex = '-1'
+                        onPasswordLogin(user.uid, null, null, token);
+                    })
+                } else {
+                    let container = document.getElementById('firebase-auth-container');
+                    console.debug('FIREBASE_AUTH:USER_SIGNED_OUT')
+                    if (container) {
+                        container.style.display = 'block';
+                        container.style.opacity = 1;
+                        container.style.zIndex = 1000;
+                    }
+                }
+            })
+        }
     },
 
     componentWillUnmount: function () {
@@ -397,7 +413,7 @@ module.exports = React.createClass({
                         </a>
                         {loginAsGuestJsx}
                         {returnToAppJsx}
-                        {/*{ this._renderLanguageSetting() }*/}
+                        {this._renderLanguageSetting()}
                         <LoginFooter/>
                     </div>
                 </div>

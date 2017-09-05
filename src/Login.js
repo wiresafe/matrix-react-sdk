@@ -143,6 +143,7 @@ export default class Login {
 
         const client = this._createTemporaryClient();
         return client.login('m.login.password', loginParams).then(function (data) {
+            console.debug('LOGIN:PASSWORD:SUCCESS');
             return Promise.resolve({
                 homeserverUrl: self._hsUrl,
                 identityServerUrl: self._isUrl,
@@ -151,6 +152,7 @@ export default class Login {
                 accessToken: data.access_token,
             });
         }, function (error) {
+            console.debug('LOGIN:PASSWORD:ERROR:TRY-FALLBACK');
             if (error.httpStatus === 403) {
                 if (self._fallbackHsUrl) {
                     var fbClient = Matrix.createClient({
