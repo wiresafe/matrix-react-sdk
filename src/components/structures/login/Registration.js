@@ -252,15 +252,6 @@ module.exports = React.createClass({
         });
     },
 
-    showServerConfig: function() {
-      var settingsForm = document.getElementById('SettingsDiv');
-      if (settingsForm.style.display === 'none' || settingsForm.style.display === "") {
-        settingsForm.style.display = 'block';
-      } else {
-        settingsForm.style.display = 'none';
-      }
-    },
-
     onFormValidationFailed: function(errCode) {
         var errMsg;
         switch (errCode) {
@@ -284,12 +275,6 @@ module.exports = React.createClass({
                 break;
             case "RegistrationForm.ERR_USERNAME_BLANK":
                 errMsg = _t('You need to enter a user name.');
-                break;
-            case "RegistrationForm.ERR_EMAIL_BLANK":
-                errMsg = 'You need to enter an Email.';
-                break;
-            case "RegistrationForm.ERR_PHONENUMBER_BLANK":
-                errMsg = 'You need to enter a phone number.';
                 break;
             default:
                 console.error("Unknown error code: %s", errCode);
@@ -378,17 +363,15 @@ module.exports = React.createClass({
                         onTeamSelected={this.onTeamSelected}
                     />
                     {errorSection}
-                    <div className="mx_Login_Serverconfig">
-                      <div className='mx_Login_ServerconfigImage'><img src="/img/settings-big.png" className="mx_Login_ServerconfigButton" onClick={this.showServerConfig} id="SettingsButton"/></div>
-                      <div id="SettingsDiv" className="mx_Login_type_container_SettingsDiv"><ServerConfig ref="serverConfig"
-                          withToggleButton={true}
-                          customHsUrl={this.props.customHsUrl}
-                          customIsUrl={this.props.customIsUrl}
-                          defaultHsUrl={this.props.defaultHsUrl}
-                          defaultIsUrl={this.props.defaultIsUrl}
-                          onServerConfigChange={this.onServerConfigChange}
-                          delayTimeMs={1000}/></div>
-                    </div>
+                    <ServerConfig ref="serverConfig"
+                        withToggleButton={true}
+                        customHsUrl={this.props.customHsUrl}
+                        customIsUrl={this.props.customIsUrl}
+                        defaultHsUrl={this.props.defaultHsUrl}
+                        defaultIsUrl={this.props.defaultIsUrl}
+                        onServerConfigChange={this.onServerConfigChange}
+                        delayTimeMs={1000}
+                    />
                 </div>
             );
         }
@@ -416,6 +399,7 @@ module.exports = React.createClass({
                         {_t('I already have an account')}
                     </a>
                     {returnToAppJsx}
+                    <LoginFooter />
                 </div>
             </div>
         );

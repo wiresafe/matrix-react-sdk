@@ -15,7 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import Matrix from 'matrix-js-sdk';
+import Matrix from "matrix-js-sdk";
+import { _t } from "./languageHandler";
 
 import Promise from 'bluebird';
 import url from 'url';
@@ -60,7 +61,7 @@ export default class Login {
     getFlows() {
         var self = this;
         var client = this._createTemporaryClient();
-        return client.loginFlows().then(function (result) {
+        return client.loginFlows().then(function(result) {
             self._flows = result.flows;
             self._currentFlowIndex = 0;
             // technically the UI should display options for all flows for the
@@ -76,7 +77,7 @@ export default class Login {
     getCurrentFlowStep() {
         // technically the flow can have multiple steps, but no one does this
         // for login so we can ignore it.
-        var flowStep = this._flows[ this._currentFlowIndex ];
+        var flowStep = this._flows[this._currentFlowIndex];
         return flowStep ? flowStep.type : null;
     }
 
@@ -93,7 +94,7 @@ export default class Login {
                 accessToken: creds.access_token,
                 homeserverUrl: this._hsUrl,
                 identityServerUrl: this._isUrl,
-                guest: true,
+                guest: true
             };
         }, (error) => {
             throw error;
@@ -103,7 +104,7 @@ export default class Login {
     loginViaPassword(username, phoneCountry, phoneNumber, pass) {
         const self = this;
 
-        const isEmail = username.indexOf('@') > 0;
+        const isEmail = username.indexOf("@") > 0;
 
         let identifier;
         let legacyParams; // parameters added to support old HSes
@@ -149,7 +150,7 @@ export default class Login {
                 identityServerUrl: self._isUrl,
                 userId: data.user_id,
                 deviceId: data.device_id,
-                accessToken: data.access_token,
+                accessToken: data.access_token
             });
         }, function (error) {
             console.debug('LOGIN:PASSWORD:ERROR:TRY-FALLBACK');
@@ -160,15 +161,15 @@ export default class Login {
                         idBaseUrl: this._isUrl,
                     });
 
-                    return fbClient.login('m.login.password', loginParams).then(function (data) {
+                    return fbClient.login('m.login.password', loginParams).then(function(data) {
                         return Promise.resolve({
                             homeserverUrl: self._fallbackHsUrl,
                             identityServerUrl: self._isUrl,
                             userId: data.user_id,
                             deviceId: data.device_id,
-                            accessToken: data.access_token,
+                            accessToken: data.access_token
                         });
-                    }, function (fallback_error) {
+                    }, function(fallback_error) {
                         // throw the original error
                         throw error;
                     });
@@ -179,18 +180,18 @@ export default class Login {
     }
 
     redirectToCas() {
-        const client = this._createTemporaryClient();
-        const parsedUrl = url.parse(window.location.href, true);
+      const client = this._createTemporaryClient();
+      const parsedUrl = url.parse(window.location.href, true);
 
-        // XXX: at this point, the fragment will always be #/login, which is no
-        // use to anyone. Ideally, we would get the intended fragment from
-        // MatrixChat.screenAfterLogin so that you could follow #/room links etc
-        // through a CAS login.
-        parsedUrl.hash = '';
+      // XXX: at this point, the fragment will always be #/login, which is no
+      // use to anyone. Ideally, we would get the intended fragment from
+      // MatrixChat.screenAfterLogin so that you could follow #/room links etc
+      // through a CAS login.
+      parsedUrl.hash = "";
 
-        parsedUrl.query[ 'homeserver' ] = client.getHomeserverUrl();
-        parsedUrl.query[ 'identityServer' ] = client.getIdentityServerUrl();
-        const casUrl = client.getCasLoginUrl(url.format(parsedUrl));
-        window.location.href = casUrl;
+      parsedUrl.query["homeserver"] = client.getHomeserverUrl();
+      parsedUrl.query["identityServer"] = client.getIdentityServerUrl();
+      const casUrl = client.getCasLoginUrl(url.format(parsedUrl));
+      window.location.href = casUrl;
     }
 }

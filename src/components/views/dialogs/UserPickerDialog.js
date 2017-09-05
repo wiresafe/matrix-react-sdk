@@ -373,7 +373,7 @@ module.exports = React.createClass({
                 ref="textinput"
                 className="mx_ChatInviteDialog_input"
                 onChange={this.onQueryChanged}
-                placeholder="Email or username"
+                placeholder={this.props.placeholder}
                 defaultValue={this.props.value}
                 autoFocus={this.props.focus}>
             </textarea>,

@@ -76,7 +76,7 @@ module.exports = React.createClass({
 
     componentWillMount: function () {
         this._unmounted = false;
-        this._initLoginLogic();
+        this._initLoginLogic('https://neo.wiresafe.com','https://neo-identity.wiresafe.com');
         this.firebaseAuthInit();
     },
 

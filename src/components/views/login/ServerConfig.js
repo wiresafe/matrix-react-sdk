@@ -158,7 +158,7 @@ module.exports = React.createClass({
                     <label className="mx_Login_label mx_ServerConfig_hslabel" htmlFor="hsurl">
                         {_t("Home server URL")}
                     </label>
-                    <input className="mx_Login_field_Settings" id="hsurl" type="text"
+                    <input className="mx_Login_field" id="hsurl" type="text"
                         placeholder={this.props.defaultHsUrl}
                         disabled={!this.props.withToggleButton}
                         value={this.state.hs_url}
@@ -166,7 +166,7 @@ module.exports = React.createClass({
                     <label className="mx_Login_label mx_ServerConfig_islabel" htmlFor="isurl">
                         {_t("Identity server URL")}
                     </label>
-                    <input className="mx_Login_field_Settings" id="isurl" type="text"
+                    <input className="mx_Login_field" id="isurl" type="text"
                         placeholder={this.props.defaultIsUrl}
                         disabled={!this.props.withToggleButton}
                         value={this.state.is_url}
