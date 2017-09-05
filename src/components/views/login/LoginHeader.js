@@ -24,7 +24,7 @@ module.exports = React.createClass({
     render: function() {
         return (
             <div className="mx_Login_logo">
-                Matrix
+                Wiresafe
             </div>
         );
     }

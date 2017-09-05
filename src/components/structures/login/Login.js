@@ -70,7 +70,7 @@ module.exports = React.createClass({
             username: '',
             phoneCountry: null,
             phoneNumber: '',
-            currentFlow: 'm.login.password',
+            currentFlow: 'm.login.firebase',
         };
     },
 
@@ -114,7 +114,6 @@ module.exports = React.createClass({
     componentWillUnmount: function () {
         this._unmounted = true;
     },
-
 
     onPasswordLogin: function (username, phoneCountry, phoneNumber, password) {
         this.setState({
@@ -164,6 +163,10 @@ module.exports = React.createClass({
 
     onCasLogin: function () {
         this._loginLogic.redirectToCas();
+    },
+
+    onFirebaseLogin: function() {
+        console.debug('FUCKING A FIREBASE LOGIN!')
     },
 
     _onLoginAsGuestClick: function () {
@@ -343,6 +346,11 @@ module.exports = React.createClass({
                 return (
                     <CasLogin onSubmit={this.onCasLogin}/>
                 );
+            case 'm.login.firebase':
+                const FirebaseLogin = sdk.getComponent('login.FirebaseLogin');
+                return (
+                    <FirebaseLogin onLoginSuccess={this.onFirebaseLogin}/>
+                )
             default:
                 if (!step) {
                     return;
