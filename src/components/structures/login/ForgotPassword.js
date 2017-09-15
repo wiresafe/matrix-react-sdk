@@ -1,6 +1,5 @@
 /*
 Copyright 2015, 2016 OpenMarket Ltd
-Copyright 2017 New Vector Ltd
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -90,7 +89,7 @@ module.exports = React.createClass({
         }
         else {
             var QuestionDialog = sdk.getComponent("dialogs.QuestionDialog");
-            Modal.createTrackedDialog('Forgot Password Warning', '', QuestionDialog, {
+            Modal.createDialog(QuestionDialog, {
                 title: _t('Warning!'),
                 description:
                     <div>
@@ -122,7 +121,8 @@ module.exports = React.createClass({
     },
 
     _onExportE2eKeysClicked: function() {
-        Modal.createTrackedDialogAsync('Export E2E Keys', 'Forgot Password', (cb) => {
+        Modal.createDialogAsync(
+            (cb) => {
             require.ensure(['../../../async-components/views/dialogs/ExportE2eKeysDialog'], () => {
                 cb(require('../../../async-components/views/dialogs/ExportE2eKeysDialog'));
             }, "e2e-export");
@@ -131,26 +131,36 @@ module.exports = React.createClass({
         });
     },
 
+    showServerConfig: function() {
+      var settingsForm = document.getElementById('SettingsDiv');
+      if (settingsForm.style.display === 'none' || settingsForm.style.display === "") {
+        settingsForm.style.display = 'block';
+      } else {
+        settingsForm.style.display = 'none';
+      }
+    },
+
     onInputChanged: function(stateKey, ev) {
         this.setState({
             [stateKey]: ev.target.value
         });
     },
 
-    onServerConfigChange: function(config) {
-        const newState = {};
-        if (config.hsUrl !== undefined) {
-            newState.enteredHomeserverUrl = config.hsUrl;
-        }
-        if (config.isUrl !== undefined) {
-            newState.enteredIdentityServerUrl = config.isUrl;
-        }
-        this.setState(newState);
+    onHsUrlChanged: function(newHsUrl) {
+        this.setState({
+            enteredHomeserverUrl: newHsUrl
+        });
+    },
+
+    onIsUrlChanged: function(newIsUrl) {
+        this.setState({
+            enteredIdentityServerUrl: newIsUrl
+        });
     },
 
     showErrorDialog: function(body, title) {
         var ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
-        Modal.createTrackedDialog('Forgot Password Error', '', ErrorDialog, {
+        Modal.createDialog(ErrorDialog, {
             title: title,
             description: body,
         });
@@ -170,7 +180,7 @@ module.exports = React.createClass({
         else if (this.state.progress === "sent_email") {
             resetPasswordJsx = (
                 <div>
-                    { _t('An email has been sent to') } {this.state.email}. { _t("Once you've followed the link it contains, click below") }.
+                    { _t('An email has been sent to') } {this.state.email}. { _t('Once you&#39;ve followed the link it contains, click below') }.
                     <br />
                     <input className="mx_Login_submit" type="button" onClick={this.onVerify}
                         value={ _t('I have verified my email address') } />
@@ -215,14 +225,17 @@ module.exports = React.createClass({
                         <br />
                         <input className="mx_Login_submit" type="submit" value={ _t('Send Reset Email') } />
                     </form>
-                    <ServerConfig ref="serverConfig"
+                    <div className="mx_Login_Serverconfig">
+                      <div className='mx_Login_ServerconfigImage'><img src="/img/settings-big.png" className="mx_Login_ServerconfigButton" onClick={this.showServerConfig} id="SettingsButton"/></div>
+                      <div id="SettingsDiv" className="mx_Login_type_container_SettingsDiv"><ServerConfig ref="serverConfig"
                         withToggleButton={true}
+                          customHsUrl={this.props.customHsUrl}
+                          customIsUrl={this.props.customIsUrl}
                         defaultHsUrl={this.props.defaultHsUrl}
                         defaultIsUrl={this.props.defaultIsUrl}
-                        customHsUrl={this.props.customHsUrl}
-                        customIsUrl={this.props.customIsUrl}
                         onServerConfigChange={this.onServerConfigChange}
-                        delayTimeMs={0}/>
+                          delayTimeMs={0}/></div>
+                    </div>
                     <div className="mx_Login_error">
                     </div>
                     <a className="mx_Login_create" onClick={this.props.onLoginClick} href="#">
@@ -231,7 +244,6 @@ module.exports = React.createClass({
                     <a className="mx_Login_create" onClick={this.props.onRegisterClick} href="#">
                         { _t('Create an account') }
                     </a>
-                    <LoginFooter />
                 </div>
             </div>
             );
