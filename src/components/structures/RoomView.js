@@ -122,6 +122,9 @@ module.exports = React.createClass({
             // store the error here.
             roomLoadError: null,
 
+            // Have we sent a request to join the room that we're waiting to complete?
+            joining: false,
+
             // this is true if we are fully scrolled-down, and are looking at
             // the end of the live timeline. It has the effect of hiding the
             // 'scroll to bottom' knob, among a couple of other things.
@@ -169,10 +172,6 @@ module.exports = React.createClass({
             shouldPeek: RoomViewStore.shouldPeek(),
         };
 
-        // finished joining, start waiting for a room and show a spinner. See onRoom.
-        newState.waitingForRoom = this.state.joining && !newState.joining &&
-                        !RoomViewStore.getJoinError();
-
         // Temporary logging to diagnose https://github.com/vector-im/riot-web/issues/4307
         console.log(
             'RVS update:',
@@ -181,7 +180,6 @@ module.exports = React.createClass({
             'loading?', newState.roomLoading,
             'joining?', newState.joining,
             'initial?', initial,
-            'waiting?', newState.waitingForRoom,
             'shouldPeek?', newState.shouldPeek,
         );
 
@@ -635,7 +633,6 @@ module.exports = React.createClass({
         }
         this.setState({
             room: room,
-            waitingForRoom: false,
         }, () => {
             this._onRoomLoaded(room);
         });
@@ -691,14 +688,7 @@ module.exports = React.createClass({
 
     onRoomMemberMembership: function(ev, member, oldMembership) {
         if (member.userId == MatrixClientPeg.get().credentials.userId) {
-
-            if (member.membership === 'join') {
-                this.setState({
-                    waitingForRoom: false,
-                });
-            } else {
-                this.forceUpdate();
-            }
+            this.forceUpdate();
         }
     },
 
@@ -1448,10 +1438,6 @@ module.exports = React.createClass({
         const Loader = sdk.getComponent("elements.Spinner");
         const TimelinePanel = sdk.getComponent("structures.TimelinePanel");
 
-        // Whether the preview bar spinner should be shown. We do this when joining or
-        // when waiting for a room to be returned by js-sdk when joining
-        const previewBarSpinner = this.state.joining || this.state.waitingForRoom;
-
         if (!this.state.room) {
             if (this.state.roomLoading || this.state.peekLoading) {
                 return (
@@ -1485,7 +1471,7 @@ module.exports = React.createClass({
                                             onRejectClick={ this.onRejectThreepidInviteButtonClicked }
                                             canPreview={ false } error={ this.state.roomLoadError }
                                             roomAlias={roomAlias}
-                                            spinner={previewBarSpinner}
+                                            spinner={this.state.joining}
                                             inviterName={inviterName}
                                             invitedEmail={invitedEmail}
                                             room={this.state.room}
@@ -1528,7 +1514,7 @@ module.exports = React.createClass({
                                             onRejectClick={ this.onRejectButtonClicked }
                                             inviterName={ inviterName }
                                             canPreview={ false }
-                                            spinner={previewBarSpinner}
+                                            spinner={this.state.joining}
                                             room={this.state.room}
                             />
                         </div>
@@ -1603,7 +1589,7 @@ module.exports = React.createClass({
                 <RoomPreviewBar onJoinClick={this.onJoinButtonClicked}
                                 onForgetClick={ this.onForgetClick }
                                 onRejectClick={this.onRejectThreepidInviteButtonClicked}
-                                spinner={previewBarSpinner}
+                                spinner={this.state.joining}
                                 inviterName={inviterName}
                                 invitedEmail={invitedEmail}
                                 canPreview={this.state.canPeek}
