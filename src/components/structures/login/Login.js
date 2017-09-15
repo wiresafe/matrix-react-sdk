@@ -318,23 +318,6 @@ module.exports = React.createClass({
         }
     },
 
-    _onLanguageChange: function(newLang) {
-        if(languageHandler.getCurrentLanguage() !== newLang) {
-            UserSettingsStore.setLocalSetting('language', newLang);
-            PlatformPeg.get().reload();
-        }
-    },
-
-    _renderLanguageSetting: function() {
-        const LanguageDropdown = sdk.getComponent('views.elements.LanguageDropdown');
-        return <div className="mx_Login_language_div">
-            <LanguageDropdown onOptionChange={this._onLanguageChange}
-                          className="mx_Login_language"
-                          value={languageHandler.getCurrentLanguage()}
-            />
-        </div>;
-    },
-
     render: function() {
         const Loader = sdk.getComponent("elements.Spinner");
         const LoginHeader = sdk.getComponent("login.LoginHeader");
@@ -375,12 +358,10 @@ module.exports = React.createClass({
                         </a>
                         { loginAsGuestJsx }
                         { returnToAppJsx }
-                        { this._renderLanguageSetting() }
-                        <LoginFooter />
                     </div>
                 </div>
                 <div className="mx_Login_Serverconfig">
-                  <div className='mx_Login_ServerconfigImage'><button className="mx_Login_ServerconfigButton" onClick={this.showServerConfig} id="SettingsButton">Settings</button></div>
+                  <div className='mx_Login_ServerconfigImage'><img src="/img/settings-big.png" className="mx_Login_ServerconfigButton" onClick={this.showServerConfig} id="SettingsButton"/></div>
                   <div id="SettingsDiv" className="mx_Login_type_container_SettingsDiv"><ServerConfig ref="serverConfig"
                       withToggleButton={true}
                       customHsUrl={this.props.customHsUrl}
