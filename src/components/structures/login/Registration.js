@@ -285,12 +285,6 @@ module.exports = React.createClass({
             case "RegistrationForm.ERR_USERNAME_BLANK":
                 errMsg = _t('You need to enter a user name.');
                 break;
-            case "RegistrationForm.ERR_EMAIL_BLANK":
-                errMsg = 'You need to enter an Email.';
-                break;
-            case "RegistrationForm.ERR_PHONENUMBER_BLANK":
-                errMsg = 'You need to enter a phone number.';
-                break;
             default:
                 console.error("Unknown error code: %s", errCode);
                 errMsg = _t('An unknown error occurred.');
@@ -379,7 +373,7 @@ module.exports = React.createClass({
                     />
                     {errorSection}
                     <div className="mx_Login_Serverconfig">
-                      <div className='mx_Login_ServerconfigImage'><img src="/img/settings-big.png" className="mx_Login_ServerconfigButton" onClick={this.showServerConfig} id="SettingsButton"/></div>
+                      <div className='mx_Login_ServerconfigImage'><button className="mx_Login_ServerconfigButton" onClick={this.showServerConfig} id="SettingsButton">Settings</button></div>
                       <div id="SettingsDiv" className="mx_Login_type_container_SettingsDiv"><ServerConfig ref="serverConfig"
                           withToggleButton={true}
                           customHsUrl={this.props.customHsUrl}
@@ -416,6 +410,7 @@ module.exports = React.createClass({
                         {_t('I already have an account')}
                     </a>
                     {returnToAppJsx}
+                    <LoginFooter />
                 </div>
             </div>
         );

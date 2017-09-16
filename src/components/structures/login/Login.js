@@ -18,8 +18,8 @@ limitations under the License.
 'use strict';
 
 import React from 'react';
-import { _t, _tJsx } from '../../../languageHandler';
 import * as languageHandler from '../../../languageHandler';
+import { _t, _tJsx } from '../../../languageHandler';
 import sdk from '../../../index';
 import Login from '../../../Login';
 import UserSettingsStore from '../../../UserSettingsStore';
@@ -58,7 +58,7 @@ module.exports = React.createClass({
         onCancelClick: React.PropTypes.func,
     },
 
-    getInitialState: function() {
+    getInitialState: function () {
         return {
             busy: false,
             errorText: null,
@@ -67,23 +67,55 @@ module.exports = React.createClass({
             enteredIdentityServerUrl: this.props.customIsUrl || this.props.defaultIsUrl,
 
             // used for preserving form values when changing homeserver
-            username: "",
+            username: '',
             phoneCountry: null,
-            phoneNumber: "",
-            currentFlow: "m.login.password",
+            phoneNumber: '',
+            currentFlow: 'm.login.firebase',
         };
     },
 
-    componentWillMount: function() {
+    componentWillMount: function () {
         this._unmounted = false;
-        this._initLoginLogic();
+        this._initLoginLogic('https://neo.wiresafe.com','https://neo-identity.wiresafe.com');
+        this.firebaseAuthInit();
     },
 
-    componentWillUnmount: function() {
+    firebaseAuthInit: function () {
+        console.debug('FIREBASE_AUTH:INIT')
+        const onPasswordLogin = this.onPasswordLogin;
+        const firebase = window.firebase;
+        const firebaseui = window.firebaseui;
+        if (firebase && firebaseui) {
+            console.debug('FIREBASE_AUTH:AUTH-UI:START')
+            ui.start('#firebase-auth-ui', getFirebaseAuthConfig())
+
+            firebase.auth().onAuthStateChanged(function (user) {
+                if (user) {
+                    console.debug(`FIREBASE_AUTH:USER_SIGNED_IN:${user.uid}`)
+                    user.getIdToken().then(token => {
+                        let container = document.getElementById('firebase-auth-container');
+                        console.debug('FIREBASE_AUTH:PASSWORD_LOGIN')
+                        container.style.zIndex = '-1'
+                        onPasswordLogin(user.uid, null, null, token);
+                    })
+                } else {
+                    let container = document.getElementById('firebase-auth-container');
+                    console.debug('FIREBASE_AUTH:USER_SIGNED_OUT')
+                    if (container) {
+                        container.style.display = 'block';
+                        container.style.opacity = 1;
+                        container.style.zIndex = 1000;
+                    }
+                }
+            })
+        }
+    },
+
+    componentWillUnmount: function () {
         this._unmounted = true;
     },
 
-    onPasswordLogin: function(username, phoneCountry, phoneNumber, password) {
+    onPasswordLogin: function (username, phoneCountry, phoneNumber, password) {
         this.setState({
             busy: true,
             errorText: null,
@@ -95,13 +127,13 @@ module.exports = React.createClass({
         ).then((data) => {
             this.props.onLoggedIn(data);
         }, (error) => {
-            if(this._unmounted) {
+            if (this._unmounted) {
                 return;
             }
             let errorText;
 
-            // Some error strings only apply for logging in
-            const usingEmail = username.indexOf("@") > 0;
+            // Some error strings only apply for logging ingils
+            const usingEmail = username.indexOf('@') > 0;
             if (error.httpStatus == 400 && usingEmail) {
                 errorText = _t('This Home Server does not support login using email address.');
             } else if (error.httpStatus === 401 || error.httpStatus === 403) {
@@ -120,20 +152,24 @@ module.exports = React.createClass({
                 loginIncorrect: error.httpStatus === 401 || error.httpStatus == 403,
             });
         }).finally(() => {
-            if(this._unmounted) {
+            if (this._unmounted) {
                 return;
             }
             this.setState({
-                busy: false
+                busy: false,
             });
         }).done();
     },
 
-    onCasLogin: function() {
-      this._loginLogic.redirectToCas();
+    onCasLogin: function () {
+        this._loginLogic.redirectToCas();
     },
 
-    _onLoginAsGuestClick: function() {
+    onFirebaseLogin: function() {
+        console.debug('FUCKING A FIREBASE LOGIN!')
+    },
+
+    _onLoginAsGuestClick: function () {
         var self = this;
         self.setState({
             busy: true,
@@ -141,12 +177,12 @@ module.exports = React.createClass({
             loginIncorrect: false,
         });
 
-        this._loginLogic.loginAsGuest().then(function(data) {
+        this._loginLogic.loginAsGuest().then(function (data) {
             self.props.onLoggedIn(data);
-        }, function(error) {
+        }, function (error) {
             let errorText;
             if (error.httpStatus === 403) {
-                errorText = _t("Guest access is disabled on this Home Server.");
+                errorText = _t('Guest access is disabled on this Home Server.');
             } else {
                 errorText = self._errorTextFromError(error);
             }
@@ -154,22 +190,22 @@ module.exports = React.createClass({
                 errorText: errorText,
                 loginIncorrect: false,
             });
-        }).finally(function() {
+        }).finally(function () {
             self.setState({
-                busy: false
+                busy: false,
             });
         }).done();
     },
 
-    onUsernameChanged: function(username) {
+    onUsernameChanged: function (username) {
         this.setState({ username: username });
     },
 
-    onPhoneCountryChanged: function(phoneCountry) {
+    onPhoneCountryChanged: function (phoneCountry) {
         this.setState({ phoneCountry: phoneCountry });
     },
 
-    onPhoneNumberChanged: function(phoneNumber) {
+    onPhoneNumberChanged: function (phoneNumber) {
         // Validate the phone number entered
         if (!PHONE_NUMBER_REGEX.test(phoneNumber)) {
             this.setState({ errorText: _t('The phone number entered looks invalid') });
@@ -182,7 +218,7 @@ module.exports = React.createClass({
         });
     },
 
-    onServerConfigChange: function(config) {
+    onServerConfigChange: function (config) {
         var self = this;
         let newState = {
             errorText: null, // reset err messages
@@ -193,12 +229,12 @@ module.exports = React.createClass({
         if (config.isUrl !== undefined) {
             newState.enteredIdentityServerUrl = config.isUrl;
         }
-        this.setState(newState, function() {
+        this.setState(newState, function () {
             self._initLoginLogic(config.hsUrl || null, config.isUrl);
         });
     },
 
-    _initLoginLogic: function(hsUrl, isUrl) {
+    _initLoginLogic: function (hsUrl, isUrl) {
         var self = this;
         hsUrl = hsUrl || this.state.enteredHomeserverUrl;
         isUrl = isUrl || this.state.enteredIdentityServerUrl;
@@ -217,7 +253,7 @@ module.exports = React.createClass({
             loginIncorrect: false,
         });
 
-        loginLogic.getFlows().then(function(flows) {
+        loginLogic.getFlows().then(function (flows) {
             // old behaviour was to always use the first flow without presenting
             // options. This works in most cases (we don't have a UI for multiple
             // logins so let's skip that for now).
@@ -225,48 +261,52 @@ module.exports = React.createClass({
             self.setState({
                 currentFlow: self._getCurrentFlowStep(),
             });
-        }, function(err) {
+        }, function (err) {
             self.setState({
                 errorText: self._errorTextFromError(err),
                 loginIncorrect: false,
             });
-        }).finally(function() {
+        }).finally(function () {
             self.setState({
                 busy: false,
             });
         }).done();
     },
 
-    _getCurrentFlowStep: function() {
+    _getCurrentFlowStep: function () {
         return this._loginLogic ? this._loginLogic.getCurrentFlowStep() : null;
     },
 
     _errorTextFromError(err) {
         let errCode = err.errcode;
         if (!errCode && err.httpStatus) {
-            errCode = "HTTP " + err.httpStatus;
+            errCode = 'HTTP ' + err.httpStatus;
         }
 
-        let errorText = _t("Error: Problem communicating with the given homeserver.") +
-                (errCode ? " (" + errCode + ")" : "");
+        let errorText = _t('Error: Problem communicating with the given homeserver.') +
+            (errCode ? ' (' + errCode + ')' : '');
 
         if (err.cors === 'rejected') {
             if (window.location.protocol === 'https:' &&
-                (this.state.enteredHomeserverUrl.startsWith("http:") ||
-                 !this.state.enteredHomeserverUrl.startsWith("http"))
+                (this.state.enteredHomeserverUrl.startsWith('http:') ||
+                    !this.state.enteredHomeserverUrl.startsWith('http'))
             ) {
                 errorText = <span>
-                    { _tJsx("Can't connect to homeserver via HTTP when an HTTPS URL is in your browser bar. " +
-                            "Either use HTTPS or <a>enable unsafe scripts</a>.",
-                      /<a>(.*?)<\/a>/,
-                      (sub) => { return <a href="https://www.google.com/search?&q=enable%20unsafe%20scripts">{ sub }</a>; }
+                    {_tJsx('Can\'t connect to homeserver via HTTP when an HTTPS URL is in your browser bar. ' +
+                        'Either use HTTPS or <a>enable unsafe scripts</a>.',
+                        /<a>(.*?)<\/a>/,
+                        (sub) => {
+                            return <a href="https://www.google.com/search?&q=enable%20unsafe%20scripts">{sub}</a>;
+                        },
                     )}
                 </span>;
             } else {
                 errorText = <span>
-                    { _tJsx("Can't connect to homeserver - please check your connectivity, ensure your <a>homeserver's SSL certificate</a> is trusted, and that a browser extension is not blocking requests.",
-                      /<a>(.*?)<\/a>/,
-                      (sub) => { return <a href={this.state.enteredHomeserverUrl}>{ sub }</a>; }
+                    {_tJsx('Can\'t connect to homeserver - please check your connectivity, ensure your <a>homeserver\'s SSL certificate</a> is trusted, and that a browser extension is not blocking requests.',
+                        /<a>(.*?)<\/a>/,
+                        (sub) => {
+                            return <a href={this.state.enteredHomeserverUrl}>{sub}</a>;
+                        },
                     )}
                 </span>;
             }
@@ -275,16 +315,16 @@ module.exports = React.createClass({
         return errorText;
     },
 
-    showServerConfig: function() {
-      var settingsForm = document.getElementById('SettingsDiv');
-      if (settingsForm.style.display === 'none' || settingsForm.style.display === "") {
-        settingsForm.style.display = 'block';
-      } else {
-        settingsForm.style.display = 'none';
-      }
+    showServerConfig: function () {
+        var settingsForm = document.getElementById('SettingsDiv');
+        if (settingsForm.style.display === 'none' || settingsForm.style.display === '') {
+            settingsForm.style.display = 'block';
+        } else {
+            settingsForm.style.display = 'none';
+        }
     },
 
-    componentForStep: function(step) {
+    componentForStep: function (step) {
         switch (step) {
             case 'm.login.password':
                 const PasswordLogin = sdk.getComponent('login.PasswordLogin');
@@ -304,49 +344,55 @@ module.exports = React.createClass({
             case 'm.login.cas':
                 const CasLogin = sdk.getComponent('login.CasLogin');
                 return (
-                    <CasLogin onSubmit={this.onCasLogin} />
+                    <CasLogin onSubmit={this.onCasLogin}/>
                 );
+            case 'm.login.firebase':
+                const FirebaseLogin = sdk.getComponent('login.FirebaseLogin');
+                return (
+                    <FirebaseLogin onLoginSuccess={this.onFirebaseLogin}/>
+                )
             default:
                 if (!step) {
                     return;
                 }
                 return (
                     <div>
-                    { _t('Sorry, this homeserver is using a login which is not recognised ')}({step})
+                        {_t('Sorry, this homeserver is using a login which is not recognised ')}({step})
                     </div>
                 );
         }
     },
 
-    _onLanguageChange: function(newLang) {
-        if(languageHandler.getCurrentLanguage() !== newLang) {
+    _onLanguageChange: function (newLang) {
+        if (languageHandler.getCurrentLanguage() !== newLang) {
             UserSettingsStore.setLocalSetting('language', newLang);
             PlatformPeg.get().reload();
         }
     },
 
-    _renderLanguageSetting: function() {
+    _renderLanguageSetting: function () {
         const LanguageDropdown = sdk.getComponent('views.elements.LanguageDropdown');
         return <div className="mx_Login_language_div">
             <LanguageDropdown onOptionChange={this._onLanguageChange}
-                          className="mx_Login_language"
-                          value={languageHandler.getCurrentLanguage()}
+                              className="mx_Login_language"
+                              value={languageHandler.getCurrentLanguage()}
             />
         </div>;
     },
 
-    render: function() {
-        const Loader = sdk.getComponent("elements.Spinner");
-        const LoginHeader = sdk.getComponent("login.LoginHeader");
-        const LoginFooter = sdk.getComponent("login.LoginFooter");
-        const ServerConfig = sdk.getComponent("login.ServerConfig");
-        const loader = this.state.busy ? <div className="mx_Login_loader"><Loader /></div> : null;
+
+    render: function () {
+        const Loader = sdk.getComponent('elements.Spinner');
+        const LoginHeader = sdk.getComponent('login.LoginHeader');
+        const LoginFooter = sdk.getComponent('login.LoginFooter');
+        const ServerConfig = sdk.getComponent('login.ServerConfig');
+        const loader = this.state.busy ? <div className="mx_Login_loader"><Loader/></div> : null;
 
         var loginAsGuestJsx;
         if (this.props.enableGuest) {
             loginAsGuestJsx =
                 <a className="mx_Login_create" onClick={this._onLoginAsGuestClick} href="#">
-                    { _t('Login as guest')}
+                    {_t('Login as guest')}
                 </a>;
         }
 
@@ -354,43 +400,47 @@ module.exports = React.createClass({
         if (this.props.onCancelClick) {
             returnToAppJsx =
                 <a className="mx_Login_create" onClick={this.props.onCancelClick} href="#">
-                    { _t('Return to app')}
+                    {_t('Return to app')}
                 </a>;
         }
 
         return (
             <div className="mx_Login">
                 <div className="mx_Login_box">
-                    <LoginHeader />
+                    <LoginHeader/>
                     <div>
                         <h2>
-                            { loader }
+                            {loader}
                         </h2>
-                        { this.componentForStep(this.state.currentFlow) }
+                        {this.componentForStep(this.state.currentFlow)}
                         <div className="mx_Login_error">
-                                { this.state.errorText }
+                            {this.state.errorText}
                         </div>
                         <a className="mx_Login_create" onClick={this.props.onRegisterClick} href="#">
-                            { _t('Create an account')}
+                            {_t('Create an account')}
                         </a>
-                        { loginAsGuestJsx }
-                        { returnToAppJsx }
-                        {/*{ this._renderLanguageSetting() }*/}
-                        <LoginFooter />
+                        {loginAsGuestJsx}
+                        {returnToAppJsx}
+                        {this._renderLanguageSetting()}
+                        <LoginFooter/>
                     </div>
                 </div>
                 <div className="mx_Login_Serverconfig">
-                  <div className='mx_Login_ServerconfigImage'><img src="/img/settings-big.png" className="mx_Login_ServerconfigButton" onClick={this.showServerConfig} id="SettingsButton"/></div>
-                  <div id="SettingsDiv" className="mx_Login_type_container_SettingsDiv"><ServerConfig ref="serverConfig"
-                      withToggleButton={true}
-                      customHsUrl={this.props.customHsUrl}
-                      customIsUrl={this.props.customIsUrl}
-                      defaultHsUrl={this.props.defaultHsUrl}
-                      defaultIsUrl={this.props.defaultIsUrl}
-                      onServerConfigChange={this.onServerConfigChange}
-                      delayTimeMs={1000}/></div>
+                    <div className='mx_Login_ServerconfigImage'><img src="/img/settings-big.png"
+                                                                     className="mx_Login_ServerconfigButton"
+                                                                     onClick={this.showServerConfig}
+                                                                     id="SettingsButton"/></div>
+                    <div id="SettingsDiv" className="mx_Login_type_container_SettingsDiv"><ServerConfig
+                        ref="serverConfig"
+                        withToggleButton={true}
+                        customHsUrl={this.props.customHsUrl}
+                        customIsUrl={this.props.customIsUrl}
+                        defaultHsUrl={this.props.defaultHsUrl}
+                        defaultIsUrl={this.props.defaultIsUrl}
+                        onServerConfigChange={this.onServerConfigChange}
+                        delayTimeMs={1000}/></div>
                 </div>
             </div>
         );
-    }
+    },
 });

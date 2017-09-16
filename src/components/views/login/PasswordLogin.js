@@ -46,7 +46,7 @@ class PasswordLogin extends React.Component {
             password: this.props.initialPassword,
             phoneCountry: this.props.initialPhoneCountry,
             phoneNumber: this.props.initialPhoneNumber,
-            loginType: PasswordLogin.LOGIN_FIELD_EMAIL,
+            loginType: PasswordLogin.LOGIN_FIELD_MXID,
         };
 
         this.onSubmitForm = this.onSubmitForm.bind(this);
@@ -195,6 +195,7 @@ class PasswordLogin extends React.Component {
                         className="mx_Login_type_dropdown"
                         value={this.state.loginType}
                         onOptionChange={this.onLoginTypeChange}>
+                            <span key={PasswordLogin.LOGIN_FIELD_MXID}>{ _t('my Matrix ID') }</span>
                             <span key={PasswordLogin.LOGIN_FIELD_EMAIL}>{ _t('Email address') }</span>
                             <span key={PasswordLogin.LOGIN_FIELD_PHONE}>{ _t('Phone') }</span>
                     </Dropdown>

@@ -143,7 +143,8 @@ export default class Login {
         Object.assign(loginParams, legacyParams);
 
         const client = this._createTemporaryClient();
-        return client.login('m.login.password', loginParams).then(function(data) {
+        return client.login('m.login.password', loginParams).then(function (data) {
+            console.debug('LOGIN:PASSWORD:SUCCESS');
             return Promise.resolve({
                 homeserverUrl: self._hsUrl,
                 identityServerUrl: self._isUrl,
@@ -151,7 +152,8 @@ export default class Login {
                 deviceId: data.device_id,
                 accessToken: data.access_token
             });
-        }, function(error) {
+        }, function (error) {
+            console.debug('LOGIN:PASSWORD:ERROR:TRY-FALLBACK');
             if (error.httpStatus === 403) {
                 if (self._fallbackHsUrl) {
                     var fbClient = Matrix.createClient({
