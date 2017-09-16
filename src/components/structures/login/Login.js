@@ -77,33 +77,11 @@ module.exports = React.createClass({
     componentWillMount: function () {
         this._unmounted = false;
         this._initLoginLogic();
-
-        // Listen to change in auth state so it displays the correct UI for when
-        // the user is signed in or not.
-        firebase.auth().onAuthStateChanged(function (user) {
-            user ? this.handleSignedInUser(user) : this.handleSignedOutUser();}
-        )
-
     },
 
     componentWillUnmount: function () {
         this._unmounted = true;
     },
-
-    handleSignedInUser: function (user) {
-        let username = user.uid
-        let phoneCountry = null;
-        let phoneNumber = null;
-        let password = user.accessToken;
-        console.log('CALLING PASSWORD LOGIN WITH CREDENTIALS', { username, phoneCountry, phoneNumber, password })
-        debugger;
-        onPasswordLogin(username, phoneCountry, phoneNumber, password)
-    },
-
-    handleSignedOutUser: function () {
-        window.open('/home/widget.html', 'Sign In', 'width=985,height=735');
-    },
-
 
     onPasswordLogin: function (username, phoneCountry, phoneNumber, password) {
         this.setState({
@@ -385,6 +363,26 @@ module.exports = React.createClass({
                     {_t('Return to app')}
                 </a>;
         }
+
+        var handleSignedInUser = function (user) {
+            let username = user.uid
+            let phoneCountry = null;
+            let phoneNumber = null;
+            let password = user.accessToken;
+            console.log('CALLING PASSWORD LOGIN WITH CREDENTIALS', { username, phoneCountry, phoneNumber, password })
+            debugger;
+            onPasswordLogin(username, phoneCountry, phoneNumber, password)
+        }
+
+        var handleSignedOutUser = function () {
+            window.open('/home/widget.html', 'Sign In', 'width=985,height=735');
+        }
+
+        // Listen to change in auth state so it displays the correct UI for when
+        // the user is signed in or not.
+        firebase.auth().onAuthStateChanged(function (user) {
+            user ? handleSignedInUser(user) : handleSignedOutUser();
+        });
 
         return (
             <div className="mx_Login">
