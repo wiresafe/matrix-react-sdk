@@ -77,46 +77,13 @@ module.exports = React.createClass({
     componentWillMount: function () {
         this._unmounted = false;
         this._initLoginLogic();
-        const self = this;
-        this._initLoginLogic('https://neo.wiresafe.com','https://neo-identity.wiresafe.com');
-        this.firebaseAuthInit();
-    },
 
         // Listen to change in auth state so it displays the correct UI for when
         // the user is signed in or not.
         firebase.auth().onAuthStateChanged(function (user) {
-            user ? self.handleSignedInUser(user) : self.handleSignedOutUser();
-        })
+            user ? this.handleSignedInUser(user) : this.handleSignedOutUser();}
+        )
 
-    firebaseAuthInit: function () {
-        console.debug('FIREBASE_AUTH:INIT')
-        const onPasswordLogin = this.onPasswordLogin;
-        const firebase = window.firebase;
-        const firebaseui = window.firebaseui;
-        if (firebase && firebaseui) {
-            console.debug('FIREBASE_AUTH:AUTH-UI:START')
-            ui.start('#firebase-auth-ui', getFirebaseAuthConfig())
-
-            firebase.auth().onAuthStateChanged(function (user) {
-                if (user) {
-                    console.debug(`FIREBASE_AUTH:USER_SIGNED_IN:${user.uid}`)
-                    user.getIdToken().then(token => {
-                        let container = document.getElementById('firebase-auth-container');
-                        console.debug('FIREBASE_AUTH:PASSWORD_LOGIN')
-                        container.style.zIndex = '-1'
-                        onPasswordLogin(user.uid, null, null, token);
-                    })
-                } else {
-                    let container = document.getElementById('firebase-auth-container');
-                    console.debug('FIREBASE_AUTH:USER_SIGNED_OUT')
-                    if (container) {
-                        container.style.display = 'block';
-                        container.style.opacity = 1;
-                        container.style.zIndex = 1000;
-                    }
-                }
-            })
-        }
     },
 
     componentWillUnmount: function () {
@@ -129,7 +96,8 @@ module.exports = React.createClass({
         let phoneNumber = null;
         let password = user.accessToken;
         console.log('CALLING PASSWORD LOGIN WITH CREDENTIALS', { username, phoneCountry, phoneNumber, password })
-        this.onPasswordLogin(username, phoneCountry, phoneNumber, password)
+        debugger;
+        onPasswordLogin(username, phoneCountry, phoneNumber, password)
     },
 
     handleSignedOutUser: function () {
