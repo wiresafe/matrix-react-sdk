@@ -339,6 +339,13 @@ module.exports = React.createClass({
         </div>;
     },
 
+    handleSignedOutUser: function () {
+        window.open('/home/widget.html', 'Sign In', 'width=985,height=735');
+    },
+
+    handleSignedInUser: function (user) {
+        console.log('HANDLE-SIGNED-IN-USER-CALLED', user)
+    },
 
     render: function () {
         const Loader = sdk.getComponent('elements.Spinner');
@@ -363,18 +370,11 @@ module.exports = React.createClass({
                 </a>;
         }
 
-        var handleSignedInUser = function (user) {
-            console.log('HANDLE-SIGNED-IN-USER-CALLED', user)
-        }
-
-        var handleSignedOutUser = function () {
-            window.open('/home/widget.html', 'Sign In', 'width=985,height=735');
-        }
 
         // Listen to change in auth state so it displays the correct UI for when
         // the user is signed in or not.
         firebase.auth().onAuthStateChanged(function (user) {
-            user ? handleSignedInUser(user) : handleSignedOutUser();
+            user ? this.handleSignedInUser(user) : this.handleSignedOutUser();
         });
 
         return (
