@@ -346,7 +346,7 @@ module.exports = React.createClass({
         const LoginFooter = sdk.getComponent('login.LoginFooter');
         const ServerConfig = sdk.getComponent('login.ServerConfig');
         const loader = this.state.busy ? <div className="mx_Login_loader"><Loader/></div> : null;
-        const onPasswordLogin = this.onPasswordLogin;
+        const onPasswordLogin = this.onPasswordLogin.bind(this);
 
         var loginAsGuestJsx;
         if (this.props.enableGuest) {
