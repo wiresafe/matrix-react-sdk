@@ -16,16 +16,21 @@ limitations under the License.
 
 'use strict';
 
-var React = require('react');
+import React from 'react';
 
 module.exports = React.createClass({
-    displayName: 'LoginHeader',
+    displayName: 'FirebaseLogin',
+    propTypes: {
+        onLoginSuccess: React.PropTypes.func,
+    },
 
-    render: function() {
+    render: function () {
         return (
-            <div className="mx_Login_logo">
-                Wiresafe
+            <div>
+                <img src={'/home/images/logo.png'} size={'180px'}/>
+                <div id="firebaseui"></div>
             </div>
         );
-    }
+    },
+
 });
