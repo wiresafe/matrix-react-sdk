@@ -342,24 +342,6 @@ module.exports = React.createClass({
         const ServerConfig = sdk.getComponent("login.ServerConfig");
         const loader = this.state.busy ? <div className="mx_Login_loader"><Loader /></div> : null;
 
-        //firebase-auth
-        console.log('LOGIN.JS - RENDER', this)
-        var uiConfig = {
-            signInSuccessUrl: '<url-to-redirect-to-on-success>',
-            signInOptions: [
-                firebase.auth.GoogleAuthProvider.PROVIDER_ID,
-                firebase.auth.EmailAuthProvider.PROVIDER_ID,
-                firebase.auth.PhoneAuthProvider.PROVIDER_ID
-            ],
-            // Terms of service url.
-            tosUrl: '<your-tos-url>'
-        };
-
-        // Initialize the FirebaseUI Widget using Firebase.
-        var ui = new firebaseui.auth.AuthUI(firebase.auth());
-        // The start method will wait until the DOM is loaded.
-        ui.start('#firebaseauth', uiConfig);
-
         var loginAsGuestJsx;
         if (this.props.enableGuest) {
             loginAsGuestJsx =
@@ -378,7 +360,6 @@ module.exports = React.createClass({
 
         return (
             <div className="mx_Login">
-                <div id="firebaseauth"></div>
                 <div className="mx_Login_box">
                     <LoginHeader />
                     <div>
