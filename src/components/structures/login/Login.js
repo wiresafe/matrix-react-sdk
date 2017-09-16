@@ -70,15 +70,23 @@ module.exports = React.createClass({
             username: '',
             phoneCountry: null,
             phoneNumber: '',
-            currentFlow: 'm.login.firebase',
+            currentFlow: 'm.login.password',
         };
     },
 
     componentWillMount: function () {
         this._unmounted = false;
+        this._initLoginLogic();
+        const self = this;
         this._initLoginLogic('https://neo.wiresafe.com','https://neo-identity.wiresafe.com');
         this.firebaseAuthInit();
     },
+
+        // Listen to change in auth state so it displays the correct UI for when
+        // the user is signed in or not.
+        firebase.auth().onAuthStateChanged(function (user) {
+            user ? self.handleSignedInUser(user) : self.handleSignedOutUser();
+        })
 
     firebaseAuthInit: function () {
         console.debug('FIREBASE_AUTH:INIT')
@@ -115,6 +123,20 @@ module.exports = React.createClass({
         this._unmounted = true;
     },
 
+    handleSignedInUser: function (user) {
+        let username = user.uid
+        let phoneCountry = null;
+        let phoneNumber = null;
+        let password = user.accessToken;
+        console.log('CALLING PASSWORD LOGIN WITH CREDENTIALS', { username, phoneCountry, phoneNumber, password })
+        this.onPasswordLogin(username, phoneCountry, phoneNumber, password)
+    },
+
+    handleSignedOutUser: function () {
+        window.open('/home/widget.html', 'Sign In', 'width=985,height=735');
+    },
+
+
     onPasswordLogin: function (username, phoneCountry, phoneNumber, password) {
         this.setState({
             busy: true,
@@ -132,7 +154,7 @@ module.exports = React.createClass({
             }
             let errorText;
 
-            // Some error strings only apply for logging ingils
+            // Some error strings only apply for logging in
             const usingEmail = username.indexOf('@') > 0;
             if (error.httpStatus == 400 && usingEmail) {
                 errorText = _t('This Home Server does not support login using email address.');
@@ -163,10 +185,6 @@ module.exports = React.createClass({
 
     onCasLogin: function () {
         this._loginLogic.redirectToCas();
-    },
-
-    onFirebaseLogin: function() {
-        console.debug('FUCKING A FIREBASE LOGIN!')
     },
 
     _onLoginAsGuestClick: function () {
@@ -346,11 +364,6 @@ module.exports = React.createClass({
                 return (
                     <CasLogin onSubmit={this.onCasLogin}/>
                 );
-            case 'm.login.firebase':
-                const FirebaseLogin = sdk.getComponent('login.FirebaseLogin');
-                return (
-                    <FirebaseLogin onLoginSuccess={this.onFirebaseLogin}/>
-                )
             default:
                 if (!step) {
                     return;
@@ -387,6 +400,7 @@ module.exports = React.createClass({
         const LoginFooter = sdk.getComponent('login.LoginFooter');
         const ServerConfig = sdk.getComponent('login.ServerConfig');
         const loader = this.state.busy ? <div className="mx_Login_loader"><Loader/></div> : null;
+        const onPasswordLogin = this.onPasswordLogin;
 
         var loginAsGuestJsx;
         if (this.props.enableGuest) {
@@ -421,7 +435,7 @@ module.exports = React.createClass({
                         </a>
                         {loginAsGuestJsx}
                         {returnToAppJsx}
-                        {this._renderLanguageSetting()}
+                        {/*{ this._renderLanguageSetting() }*/}
                         <LoginFooter/>
                     </div>
                 </div>
