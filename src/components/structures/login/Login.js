@@ -124,7 +124,7 @@ module.exports = React.createClass({
                 return;
             }
             this.setState({
-                busy: false
+                busy: false,
             });
         }).done();
     },
@@ -363,7 +363,7 @@ module.exports = React.createClass({
                 <div className="mx_Login_box">
                     <LoginHeader />
                     <div>
-                        <h2>
+                        <h2>{ _t('Sign in')}
                             { loader }
                         </h2>
                         { this.componentForStep(this.state.currentFlow) }
