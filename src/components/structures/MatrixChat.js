@@ -444,6 +444,10 @@ module.exports = React.createClass({
             case 'view_create_room':
                 this._createRoom();
                 break;
+            case 'view_send_wiring_information':
+                this._setPage(PageTypes.WiringInformation);
+                this.notifyNewScreen('wire');
+                break;
             case 'view_room_directory':
                 this._setPage(PageTypes.RoomDirectory);
                 this.notifyNewScreen('directory');
@@ -1093,6 +1097,10 @@ module.exports = React.createClass({
         } else if (screen == 'home') {
             dis.dispatch({
                 action: 'view_home_page',
+            });
+        } else if (screen == 'wire') {
+            dis.dispatch({
+                action: 'view_send_wiring_information',
             });
         } else if (screen == 'start') {
             this.showScreen('home');

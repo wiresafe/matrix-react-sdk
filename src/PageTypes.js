@@ -17,6 +17,7 @@ limitations under the License.
 /** The types of page which can be shown by the LoggedInView */
 export default {
     HomePage: "home_page",
+    WiringInformation: "wiring_information",
     RoomView: "room_view",
     UserSettings: "user_settings",
     CreateRoom: "create_room",

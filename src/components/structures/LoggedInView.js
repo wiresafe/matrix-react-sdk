@@ -274,9 +274,21 @@ export default React.createClass({
                     teamServerUrl={teamServerUrl}
                     teamToken={this.props.teamToken}
                     homePageUrl={this.props.config.welcomePageUrl}
+                    showWiringButton={false}
                 />;
                 break;
-
+            case PageTypes.WiringInformation:
+                    // If team server config is present, pass the teamServerURL. props.teamToken
+                    // must also be set for the team page to be displayed, otherwise the
+                    // welcomePageUrl is used (which might be undefined).
+                page_element = <HomePage
+                    collapsedRhs={this.props.collapse_rhs}
+                    teamServerUrl={teamServerUrl}
+                    teamToken={this.props.teamToken}
+                    homePageUrl={this.props.config.welcomePageUrl}
+                    showWiringButton={true}
+                />;
+                break;
             case PageTypes.UserView:
                 page_element = null; // deliberately null for now
                 right_panel = <RightPanel userId={this.props.viewUserId} opacity={this.props.rightOpacity} />;
