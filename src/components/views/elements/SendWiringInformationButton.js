@@ -32,7 +32,7 @@ const SendWiringInformationButton = function(props) {
 };
 
 SendWiringInformationButton.propTypes = {
-    size: 32,
+    size: PropTypes.string,
     tooltip: PropTypes.bool,
 };
 
