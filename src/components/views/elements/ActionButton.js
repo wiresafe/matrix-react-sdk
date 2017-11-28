@@ -34,7 +34,7 @@ export default React.createClass({
 
     getDefaultProps: function() {
         return {
-            size: "27.5",
+            size: "25",
             tooltip: false,
         };
     },

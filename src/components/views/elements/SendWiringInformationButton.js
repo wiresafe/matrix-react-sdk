@@ -24,7 +24,7 @@ const SendWiringInformationButton = function(props) {
     return (
         <ActionButton action="view_send_wiring_information"
             label={ "Send Wiring Information" }
-            iconPath="img/icons-bankdetails.png"
+            iconPath="img/icons-bankdetails.svg"
             size={props.size}
             tooltip={props.tooltip}
         />
