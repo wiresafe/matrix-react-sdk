@@ -1324,7 +1324,7 @@ module.exports = React.createClass({
             PlatformPeg.get().setNotificationCount(notifCount);
         }
 
-        let title = "Riot ";
+        let title = "Wiresafe ";
         if (state === "ERROR") {
             title += `[${_t("Offline")}] `;
         }
